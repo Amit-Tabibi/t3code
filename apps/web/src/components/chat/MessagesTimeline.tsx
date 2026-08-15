@@ -1773,7 +1773,10 @@ const UserMessageBody = memo(function UserMessageBody(props: {
         }
 
         return (
-          <div className="whitespace-pre-wrap wrap-break-word text-message-foreground text-sm leading-relaxed">
+          <div
+            dir="auto"
+            className="whitespace-pre-wrap wrap-break-word text-message-foreground text-sm leading-relaxed"
+          >
             {inlineNodes}
           </div>
         );
@@ -1812,7 +1815,10 @@ const UserMessageBody = memo(function UserMessageBody(props: {
     }
 
     return (
-      <div className="whitespace-pre-wrap wrap-break-word text-message-foreground text-sm leading-relaxed">
+      <div
+        dir="auto"
+        className="whitespace-pre-wrap wrap-break-word text-message-foreground text-sm leading-relaxed"
+      >
         {inlineNodes}
       </div>
     );
@@ -1854,7 +1860,7 @@ function UserMessageReviewCommentCard({ comment }: { comment: ReviewCommentConte
         </div>
       </div>
       {comment.text.length > 0 && (
-        <div className="whitespace-pre-wrap wrap-break-word text-sm">
+        <div dir="auto" className="whitespace-pre-wrap wrap-break-word text-sm">
           <SkillInlineText text={comment.text} skills={ctx.skills} />
         </div>
       )}

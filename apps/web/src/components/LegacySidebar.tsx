@@ -730,6 +730,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
               <TooltipTrigger
                 render={
                   <span
+                    dir="auto"
                     className="min-w-0 flex-1 truncate text-sm"
                     data-testid={`thread-title-${thread.id}`}
                   >
@@ -737,7 +738,11 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
                   </span>
                 }
               />
-              <TooltipPopup side="top" className="max-w-80 whitespace-normal leading-tight">
+              <TooltipPopup
+                dir="auto"
+                side="top"
+                className="max-w-80 whitespace-normal leading-tight"
+              >
                 {thread.title}
               </TooltipPopup>
             </Tooltip>

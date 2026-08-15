@@ -290,7 +290,10 @@ function SidebarThreadTooltip({
       className="max-w-80 text-left whitespace-normal [&_[data-slot=tooltip-viewport]]:p-0"
     >
       <div className="flex min-w-0 max-w-80 flex-col gap-2 p-[var(--floating-content-inset)]">
-        <div className="min-w-0 truncate text-xs leading-none font-medium text-foreground">
+        <div
+          dir="auto"
+          className="min-w-0 truncate text-xs leading-none font-medium text-foreground"
+        >
           {thread.title}
         </div>
         <div className="grid gap-1.5 pl-0.5 text-xs text-muted-foreground">
@@ -302,7 +305,9 @@ function SidebarThreadTooltip({
                 faviconPath={projectFaviconPath}
                 className="size-3 shrink-0 stroke-muted-foreground"
               />
-              <div className="min-w-0 truncate text-foreground/75">{projectTitle}</div>
+              <div dir="auto" className="min-w-0 truncate text-foreground/75">
+                {projectTitle}
+              </div>
             </div>
           ) : null}
           {environmentLabel ? (
@@ -533,7 +538,10 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
               faviconPath={props.projectFaviconPath}
               className="size-4 shrink-0"
             />
-            <span className="min-w-0 flex-1 truncate text-xs font-medium text-secondary-label">
+            <span
+              dir="auto"
+              className="min-w-0 flex-1 truncate text-xs font-medium text-secondary-label"
+            >
               {props.projectTitle}
             </span>
             <span className="ml-auto flex h-5 min-w-5 shrink-0 items-center justify-end">
@@ -1124,6 +1132,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     />
   ) : (
     <span
+      // Titles are generated from the thread's own prompt, so an Arabic thread
+      // gets an Arabic title — and its truncation ellipsis belongs on the left.
+      dir="auto"
       className={cn(
         "min-w-0 flex-1 text-sm transition-opacity motion-reduce:transition-none",
         shouldRecede ? "font-normal" : "font-medium",
@@ -1374,6 +1385,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               />
               {props.projectTitle ? (
                 <span
+                  dir="auto"
                   className={cn(
                     "min-w-0 flex-1 truncate text-secondary-label text-xs",
                     shouldRecede ? "font-normal" : "font-medium",
@@ -1672,7 +1684,9 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
             className="size-4 shrink-0"
             fallbackIcon={MessageSquareIcon}
           />
-          <span className="min-w-0 flex-1 truncate">{thread.title}</span>
+          <span dir="auto" className="min-w-0 flex-1 truncate">
+            {thread.title}
+          </span>
           <span className="shrink-0 text-xs text-muted-foreground/55 tabular-nums">
             {threadTimeLabel(thread)}
           </span>
