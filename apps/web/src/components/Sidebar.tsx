@@ -562,7 +562,9 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
               </Tooltip>
             </span>
           </div>
-          <div className="mt-0.5 truncate text-sm font-medium text-foreground/90">{preview}</div>
+          <div dir="auto" className="mt-0.5 truncate text-sm font-medium text-foreground/90">
+            {preview}
+          </div>
         </div>
       </div>
     </li>
