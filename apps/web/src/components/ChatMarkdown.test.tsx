@@ -71,6 +71,21 @@ describe("chat markdown text direction", () => {
     expect(html).toContain('<div dir="ltr" class="chat-markdown-codeblock');
   });
 
+  it("gives a GitHub alert's body its own direction under LTR callout chrome", () => {
+    // The alert renderer builds its own element, so the blockquote cannot be the
+    // marked block — the body paragraphs have to carry the direction instead.
+    const html = render("> [!NOTE]\n> مرحبا بالعالم.");
+    expect(html).toContain('<p dir="auto">مرحبا بالعالم.</p>');
+    expect(html).not.toContain("<blockquote");
+  });
+
+  it("pins a file-link chip left-to-right even inside right-to-left prose", () => {
+    // The `code` renderer swaps the chip in for the `<code dir="ltr">` it
+    // replaces, so a path in an Arabic sentence keeps its own reading order.
+    const html = render("عدّل `src/main.ts` من فضلك.");
+    expect(html).toContain('<a dir="ltr"');
+  });
+
   it("keeps table columns in source order while cells read their own direction", () => {
     const html = render("| اسم | value |\n| --- | --- |\n| قيمة | 1 |");
     expect(html).toContain('<table dir="ltr">');

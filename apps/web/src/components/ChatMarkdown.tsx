@@ -379,6 +379,10 @@ function remarkTextDirection() {
     // block of a run gets marked: marking a list and its items both would leave
     // the list itself with no text to judge, fall back to LTR, and paint the
     // bullets of an RTL item into a gutter that is no longer on that side.
+    //
+    // The cost is that one list reads in one direction. A list that mixes an
+    // Arabic item with an English one takes the direction of its first item,
+    // which is the trade for markers that stay next to the text they label.
     const visit = (node: MarkdownAstNode, insideAutoBlock: boolean) => {
       const type = node.type ?? "";
       if (LTR_DIRECTION_NODE_TYPES.has(type)) {
@@ -389,7 +393,13 @@ function remarkTextDirection() {
         return;
       }
 
-      const isAutoBlock = !insideAutoBlock && AUTO_DIRECTION_NODE_TYPES.has(type);
+      // A GitHub alert is rendered as a titled callout rather than a quote, and
+      // its own renderer builds that chrome from scratch. Claiming the block
+      // here would strand its body: the `dir` never reaches the callout, and the
+      // paragraphs inside it would have been skipped as already-covered.
+      const isAlertBlockquote = type === "blockquote" && node.data?.hProperties?.dataAlert != null;
+      const isAutoBlock =
+        !insideAutoBlock && !isAlertBlockquote && AUTO_DIRECTION_NODE_TYPES.has(type);
       if (isAutoBlock) {
         setDirection(node, "auto");
       }
@@ -1364,6 +1374,10 @@ const MarkdownFileLink = memo(function MarkdownFileLink({
       <TooltipTrigger
         render={
           <a
+            // A path is an identifier, so it reads left-to-right wherever the
+            // prose around it points. The `code` renderer swaps this chip in for
+            // the `<code dir="ltr">` it replaces, so the pin has to live here too.
+            dir="ltr"
             href={href}
             className={cn(CHAT_FILE_TAG_CHIP_CLASS_NAME, MARKDOWN_FILE_LINK_CLASS_NAME, className)}
             data-markdown-copy={copyMarkdown}
@@ -1631,7 +1645,7 @@ function ChatMarkdown({
         // Not a <blockquote>: the stylesheet mutes those, and an alert's body is ordinary
         // text under a colored title — which is how the host renders it.
         return (
-          <div role="note" className={cn("my-1 border-l-2 pl-3", alert.borderClassName)}>
+          <div role="note" className={cn("my-1 border-s-2 ps-3", alert.borderClassName)}>
             <p className={cn("flex items-center gap-1.5 font-medium", alert.titleClassName)}>
               <alert.Icon aria-hidden className="size-3.5 shrink-0" />
               {alert.label}

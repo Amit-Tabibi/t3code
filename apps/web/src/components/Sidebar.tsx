@@ -1120,6 +1120,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   const title = isRenaming ? (
     <input
       autoFocus
+      dir="auto"
       value={renamingTitle}
       aria-label="Thread title"
       onChange={(event) => onRenameTitleChange(event.target.value)}
