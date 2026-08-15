@@ -1835,7 +1835,9 @@ code {
 .chat-markdown th,
 .chat-markdown td {
   padding: 0.45rem 0.75rem;
-  text-align: left;
+  /* Logical: the table is pinned LTR so its columns keep their source order,
+     but each cell carries dir="auto" and aligns to its own text. */
+  text-align: start;
 }
 
 .chat-markdown thead th {
