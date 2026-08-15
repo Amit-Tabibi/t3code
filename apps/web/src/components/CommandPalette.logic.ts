@@ -89,6 +89,12 @@ export interface CommandPaletteItem {
   readonly value: string;
   readonly searchTerms: ReadonlyArray<string>;
   readonly title: ReactNode;
+  /**
+   * `"auto"` for titles that are prose the user or an agent wrote, so they read
+   * in their own direction. Left unset for the rest: this list also holds
+   * command names and file paths, and an identifier keeps the app's direction.
+   */
+  readonly titleDir?: "auto";
   readonly description?: ReactNode;
   readonly threadContentMatch?: CommandPaletteThreadContentMatch;
   readonly timestamp?: string;
@@ -158,6 +164,7 @@ export function buildProjectActionItems(input: {
     value: `${input.valuePrefix}:${project.environmentId}:${project.id}`,
     searchTerms: [project.title, project.workspaceRoot, ...(input.searchTerms?.(project) ?? [])],
     title: project.title,
+    titleDir: "auto",
     description: input.renderDescription?.(project) ?? project.workspaceRoot,
     icon: input.icon(project),
     ...(input.shortcutCommand !== undefined ? { shortcutCommand: input.shortcutCommand } : {}),
@@ -239,6 +246,7 @@ export function buildThreadActionItems<TThread extends BuildThreadActionItemsThr
           contentMatch?.snippet ?? ``,
         ],
         title: thread.title,
+        titleDir: "auto",
         description,
         timestamp: formatRelativeTimeLabel(
           thread.latestUserMessageAt ?? thread.updatedAt ?? thread.createdAt,
