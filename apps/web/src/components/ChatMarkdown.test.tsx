@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
-import ChatMarkdown, { orderedListGutterStyle } from "./ChatMarkdown";
+import ChatMarkdown, { firstStrongDirection, orderedListGutterStyle } from "./ChatMarkdown";
 
 describe("orderedListGutterStyle", () => {
   it("leaves the default gutter alone for single-digit lists", () => {
@@ -86,10 +86,32 @@ describe("chat markdown text direction", () => {
     expect(html).toContain('<a dir="ltr"');
   });
 
-  it("keeps table columns in source order while cells read their own direction", () => {
+  it("gives a table its base direction from its own content, cells still self-resolve", () => {
+    // The direction sits on the scroll viewport wrapping the table, so an
+    // overflowing Hebrew/Arabic table opens at its first, rightmost column.
     const html = render("| اسم | value |\n| --- | --- |\n| قيمة | 1 |");
-    expect(html).toContain('<table dir="ltr">');
+    expect(html).toContain('dir="rtl"');
     expect(html).toContain('<th dir="auto">');
     expect(html).toContain('<td dir="auto">');
+  });
+
+  it("keeps an English table left-to-right", () => {
+    const html = render("| Name | value |\n| --- | --- |\n| a | 1 |");
+    expect(html).not.toContain('dir="rtl"');
+  });
+});
+
+describe("firstStrongDirection", () => {
+  it("reads the first letter, skipping neutral digits and punctuation", () => {
+    expect(firstStrongDirection("רכיב | סטטוס")).toBe("rtl");
+    expect(firstStrongDirection("1. (שלב) ראשון")).toBe("rtl");
+    expect(firstStrongDirection("\u{1E900}\u{1E92F} adlam")).toBe("rtl"); // astral RTL block
+    expect(firstStrongDirection("Component | Status")).toBe("ltr");
+    expect(firstStrongDirection("42 — Next.js then עברית")).toBe("ltr");
+  });
+
+  it("falls back to ltr when there is no strong character", () => {
+    expect(firstStrongDirection("")).toBe("ltr");
+    expect(firstStrongDirection("123 | 456")).toBe("ltr");
   });
 });

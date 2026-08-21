@@ -1978,6 +1978,23 @@ code {
 
 /* Chat markdown rendering */
 
+/* Bidi: Hebrew/Arabic messages. Every leaf block resolves its own base direction
+   from its first strong character (`plaintext`), so a Hebrew paragraph reads and
+   aligns right-to-left while the English block above it stays put — no global
+   flip, mixed-language threads just work. Containers that carry a directional
+   decoration (list markers, blockquote bar, table column order) get `dir="auto"`
+   in ChatMarkdown.tsx and use logical properties below. Code stays LTR. */
+.chat-markdown :is(p, li, h1, h2, h3, h4, h5, h6, td, th, dt, dd) {
+  unicode-bidi: plaintext;
+}
+
+.chat-markdown pre,
+.chat-markdown code,
+.chat-markdown .chat-markdown-codeblock {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
 .chat-markdown > :first-child {
   margin-top: 0;
 }
@@ -2077,7 +2094,7 @@ code {
 }
 
 .chat-markdown li.task-list-item input[type="checkbox"] {
-  margin: 0 0 0.15em;
+  margin-block: 0 0.15em;
   margin-inline: calc(-1 * var(--list-gutter, 1.25rem)) 0.35em;
   vertical-align: middle;
 }
@@ -2229,8 +2246,9 @@ code {
 .chat-markdown th,
 .chat-markdown td {
   padding: 0.45rem 0.75rem;
-  /* Logical: the table is pinned LTR so its columns keep their source order,
-     but each cell carries dir="auto" and aligns to its own text. */
+  /* Logical: the table's base direction comes from its own content (an RTL
+     table opens at its rightmost column), and each cell carries dir="auto"
+     so it aligns to its own text. */
   text-align: start;
 }
 
