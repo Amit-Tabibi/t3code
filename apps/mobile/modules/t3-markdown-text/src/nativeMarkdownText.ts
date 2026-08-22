@@ -3,6 +3,8 @@ import type { MarkdownNode } from "react-native-nitro-markdown/headless";
 import type { SelectableMarkdownSkill } from "./SelectableMarkdownText.types";
 import { resolveMarkdownLinkPresentation, type MarkdownFileIcon } from "./markdownLinks";
 
+export type MarkdownWritingDirection = "ltr" | "rtl";
+
 export interface NativeMarkdownTextRun {
   readonly text: string;
   readonly bold?: boolean;
@@ -30,6 +32,7 @@ export interface NativeMarkdownTextRun {
   readonly firstLineHeadIndent?: number;
   readonly headIndent?: number;
   readonly paragraphSpacing?: number;
+  readonly writingDirection?: MarkdownWritingDirection;
 }
 
 export type NativeMarkdownDocumentChunk =
@@ -59,6 +62,7 @@ interface RunContext {
   readonly firstLineHeadIndent?: number;
   readonly headIndent?: number;
   readonly paragraphSpacing?: number;
+  readonly writingDirection?: MarkdownWritingDirection;
 }
 
 const EMPTY_CONTEXT: RunContext = {
@@ -69,6 +73,44 @@ const EMPTY_CONTEXT: RunContext = {
 };
 
 const INLINE_HTML_TAG_PATTERN = /<\/?(?:kbd|mark|sub|sup|u)(?:\s[^>]*)?>/gi;
+
+// Strong-RTL code points: Hebrew, Arabic, Syriac, Thaana, NKo, Samaritan, Mandaic and
+// their extensions/presentation forms, plus the astral RTL blocks (Phoenician … Adlam).
+const STRONG_RTL_CHAR = /[֐-ࣿיִ-﷿ﹰ-﻿\u{10800}-\u{10FFF}\u{1E800}-\u{1EFFF}]/u;
+// First letter decides (UBA P2/P3): digits, punctuation and symbols are neutral.
+const FIRST_LETTER = /\p{L}/u;
+
+// The direction a block of text renders in — what the web app's `dir="auto"` would resolve.
+export function firstStrongDirection(text: string): MarkdownWritingDirection {
+  const letter = FIRST_LETTER.exec(text)?.[0];
+  return letter && STRONG_RTL_CHAR.test(letter) ? "rtl" : "ltr";
+}
+
+// Code and tables opt out of direction detection and stay LTR: their shape is not
+// prose, so their letters must not decide the direction of the block around them —
+// the same nodes the web app pins with an explicit `dir="ltr"` (which `dir="auto"`
+// then skips when resolving an ancestor).
+const DIRECTION_NEUTRAL_NODE_TYPES = new Set(["code_block", "code_inline", "table"]);
+
+function directionSourceText(node: MarkdownNode): string {
+  if (DIRECTION_NEUTRAL_NODE_TYPES.has(node.type)) {
+    return "";
+  }
+  if (node.type === "html_inline" || node.type === "html_block") {
+    // Tag names are letters too — only the text an HTML node renders may vote.
+    return inlineHtmlText(nodeTextContent(node));
+  }
+  if (node.content !== undefined) {
+    return node.content;
+  }
+  return (node.children ?? []).map(directionSourceText).join("");
+}
+
+// The base direction of a markdown block, resolved from the block's own first
+// strong letter (mirroring the web renderer's per-block `dir="auto"`).
+export function markdownBlockDirection(node: MarkdownNode): MarkdownWritingDirection {
+  return firstStrongDirection(directionSourceText(node));
+}
 
 function decodeCodePoint(codePoint: number, entity: string): string {
   if (!Number.isInteger(codePoint) || codePoint < 0 || codePoint > 0x10ffff) {
@@ -147,7 +189,8 @@ function sameRunStyle(left: NativeMarkdownTextRun, right: NativeMarkdownTextRun)
     left.spacing === right.spacing &&
     left.firstLineHeadIndent === right.firstLineHeadIndent &&
     left.headIndent === right.headIndent &&
-    left.paragraphSpacing === right.paragraphSpacing
+    left.paragraphSpacing === right.paragraphSpacing &&
+    left.writingDirection === right.writingDirection
   );
 }
 
@@ -180,6 +223,7 @@ function appendRun(
     ...(context.paragraphSpacing !== undefined
       ? { paragraphSpacing: context.paragraphSpacing }
       : {}),
+    ...(context.writingDirection ? { writingDirection: context.writingDirection } : {}),
   };
   const previous = runs.at(-1);
   if (previous && sameRunStyle(previous, run)) {
@@ -283,8 +327,17 @@ function appendNode(
       return appendRun(runs, textNodeContent(nodeTextContent(node)), context);
     case "html_inline":
       return appendRun(runs, inlineHtmlText(nodeTextContent(node)), context);
-    case "code_inline":
-      return appendRun(runs, nodeTextContent(node), { ...context, code: true });
+    case "code_inline": {
+      // Inline code keeps its left-to-right shape even inside an RTL paragraph
+      // (the web pins `code` to LTR with CSS). Attributed strings have no
+      // per-span direction, so wrap the span in an LTR isolate (LRI … PDI).
+      const content = nodeTextContent(node);
+      return appendRun(
+        runs,
+        context.writingDirection === "rtl" ? `\u2066${content}\u2069` : content,
+        { ...context, code: true },
+      );
+    }
     case "soft_break":
       return appendRun(runs, " ", context);
     case "line_break":
@@ -404,6 +457,7 @@ function appendListItem(
   marker: string,
   depth: number,
   markerColumnWidth: number,
+  writingDirection: MarkdownWritingDirection,
 ): NativeMarkdownTextRun[] {
   const firstLineHeadIndent = Math.max(0, depth - 1) * 20;
   appendRun(runs, `${marker}\t`, {
@@ -413,6 +467,7 @@ function appendListItem(
     firstLineHeadIndent,
     headIndent: firstLineHeadIndent + markerColumnWidth,
     paragraphSpacing: 2,
+    writingDirection,
   });
 
   const children = node.children ?? [];
@@ -423,6 +478,7 @@ function appendListItem(
         ...EMPTY_CONTEXT,
         role: "body",
         depth,
+        writingDirection,
       });
       wroteInlineContent = true;
       continue;
@@ -434,9 +490,10 @@ function appendListItem(
           role: "list-break",
           depth,
           spacing: 1,
+          writingDirection,
         });
       }
-      appendList(runs, child, depth + 1);
+      appendList(runs, child, depth + 1, writingDirection);
       wroteInlineContent = false;
       continue;
     }
@@ -445,11 +502,12 @@ function appendListItem(
         ...EMPTY_CONTEXT,
         role: "body",
         depth,
+        writingDirection,
       });
       wroteInlineContent = true;
       continue;
     }
-    appendDocumentBlock(runs, child, depth);
+    appendDocumentBlock(runs, child, depth, writingDirection);
     wroteInlineContent = true;
   }
 
@@ -459,6 +517,7 @@ function appendListItem(
       role: "list-break",
       depth,
       spacing: depth === 1 ? 4 : 2,
+      writingDirection,
     });
   }
   return runs;
@@ -468,6 +527,9 @@ function appendList(
   runs: NativeMarkdownTextRun[],
   node: MarkdownNode,
   depth: number,
+  // A list takes one direction as a whole — the outermost block of a run decides
+  // and items inherit, so the markers stay on the same side as the text they label.
+  writingDirection: MarkdownWritingDirection,
 ): NativeMarkdownTextRun[] {
   const ordered = node.ordered ?? false;
   const start = node.start ?? 1;
@@ -499,7 +561,7 @@ function appendList(
           : marker;
     const markerColumnWidth =
       child.type === "task_list_item" ? 28 : ordered ? 10 + markerWidth * 8 : 24;
-    appendListItem(runs, child, alignedMarker, depth, markerColumnWidth);
+    appendListItem(runs, child, alignedMarker, depth, markerColumnWidth, writingDirection);
   }
   return runs;
 }
@@ -508,27 +570,30 @@ function appendQuoteBlock(
   runs: NativeMarkdownTextRun[],
   node: MarkdownNode,
   depth: number,
+  writingDirection: MarkdownWritingDirection,
 ): NativeMarkdownTextRun[] {
   for (const [index, child] of (node.children ?? []).entries()) {
     if (index > 0) {
-      appendBlockTerminator(runs, { ...EMPTY_CONTEXT, role: "body", depth });
+      appendBlockTerminator(runs, { ...EMPTY_CONTEXT, role: "body", depth, writingDirection });
     }
     appendRun(runs, "│\u00a0", {
       ...EMPTY_CONTEXT,
       role: "quote-marker",
       depth,
+      writingDirection,
     });
     if (child.type === "paragraph") {
       appendInlineChildren(runs, child, {
         ...EMPTY_CONTEXT,
         role: "body",
         depth,
+        writingDirection,
       });
     } else {
-      appendDocumentBlock(runs, child, depth);
+      appendDocumentBlock(runs, child, depth, writingDirection);
     }
   }
-  appendBlockTerminator(runs, { ...EMPTY_CONTEXT, role: "body", depth });
+  appendBlockTerminator(runs, { ...EMPTY_CONTEXT, role: "body", depth, writingDirection });
   return runs;
 }
 
@@ -544,6 +609,7 @@ function appendTableRow(
         ...EMPTY_CONTEXT,
         role: "divider",
         depth,
+        writingDirection: "ltr",
       });
     }
     appendInlineChildren(runs, cell, {
@@ -551,9 +617,10 @@ function appendTableRow(
       role: "body",
       bold: cell.isHeader ?? false,
       depth,
+      writingDirection: "ltr",
     });
   }
-  appendBlockTerminator(runs, { ...EMPTY_CONTEXT, role: "body", depth });
+  appendBlockTerminator(runs, { ...EMPTY_CONTEXT, role: "body", depth, writingDirection: "ltr" });
   return runs;
 }
 
@@ -579,6 +646,10 @@ function appendDocumentBlock(
   runs: NativeMarkdownTextRun[],
   node: MarkdownNode,
   depth = 0,
+  // Only the outermost block of a run resolves its own direction; nested blocks
+  // inherit it, so a list or quote reads as one directional unit (the web marks
+  // only the outermost block with `dir="auto"` for the same reason).
+  direction?: MarkdownWritingDirection,
 ): NativeMarkdownTextRun[] {
   switch (node.type) {
     case "document": {
@@ -591,7 +662,7 @@ function appendDocumentBlock(
             child.type === "heading" ? 20 : previous?.type === "heading" ? 10 : 12,
           );
         }
-        appendDocumentBlock(runs, child, depth);
+        appendDocumentBlock(runs, child, depth, direction);
       }
       return runs;
     }
@@ -601,26 +672,35 @@ function appendDocumentBlock(
         role: "heading",
         headingLevel: node.level ?? 1,
         depth,
+        writingDirection: direction ?? markdownBlockDirection(node),
       };
       appendInlineChildren(runs, node, context);
       return appendBlockTerminator(runs, context);
     }
     case "paragraph": {
-      const context: RunContext = { ...EMPTY_CONTEXT, role: "body", depth };
+      const context: RunContext = {
+        ...EMPTY_CONTEXT,
+        role: "body",
+        depth,
+        writingDirection: direction ?? markdownBlockDirection(node),
+      };
       appendInlineChildren(runs, node, context);
       return appendBlockTerminator(runs, context);
     }
     case "list":
-      return appendList(runs, node, depth + 1);
+      return appendList(runs, node, depth + 1, direction ?? markdownBlockDirection(node));
     case "blockquote":
-      return appendQuoteBlock(runs, node, depth);
+      return appendQuoteBlock(runs, node, depth, direction ?? markdownBlockDirection(node));
     case "code_block": {
+      // Code stays LTR always: identifiers and paths read the same in every
+      // locale, and a Hebrew comment must not flip the snippet.
       if (node.language) {
         appendRun(runs, `${node.language.toUpperCase()}\n`, {
           ...EMPTY_CONTEXT,
           role: "code-language",
           code: true,
           depth,
+          writingDirection: "ltr",
         });
       }
       const content = nodeTextContent(node);
@@ -629,6 +709,7 @@ function appendDocumentBlock(
         role: "code-block",
         code: true,
         depth,
+        writingDirection: "ltr",
       });
       if (!content.endsWith("\n")) {
         appendBlockTerminator(runs, {
@@ -636,6 +717,7 @@ function appendDocumentBlock(
           role: "code-block",
           code: true,
           depth,
+          writingDirection: "ltr",
         });
       }
       return runs;
@@ -649,19 +731,36 @@ function appendDocumentBlock(
       return runs;
     case "table":
       return appendTable(runs, node, depth);
-    case "html_block":
-      appendRun(runs, inlineHtmlText(nodeTextContent(node)), {
+    case "html_block": {
+      const context: RunContext = {
         ...EMPTY_CONTEXT,
         role: "body",
         depth,
-      });
-      return appendBlockTerminator(runs, { ...EMPTY_CONTEXT, role: "body", depth });
-    case "math_block":
-      appendRun(runs, nodeTextContent(node), { ...EMPTY_CONTEXT, role: "body", depth });
-      return appendBlockTerminator(runs, { ...EMPTY_CONTEXT, role: "body", depth });
-    default:
-      appendInlineChildren(runs, node, { ...EMPTY_CONTEXT, role: "body", depth });
-      return appendBlockTerminator(runs, { ...EMPTY_CONTEXT, role: "body", depth });
+        writingDirection: direction ?? markdownBlockDirection(node),
+      };
+      appendRun(runs, inlineHtmlText(nodeTextContent(node)), context);
+      return appendBlockTerminator(runs, context);
+    }
+    case "math_block": {
+      const context: RunContext = {
+        ...EMPTY_CONTEXT,
+        role: "body",
+        depth,
+        writingDirection: direction ?? markdownBlockDirection(node),
+      };
+      appendRun(runs, nodeTextContent(node), context);
+      return appendBlockTerminator(runs, context);
+    }
+    default: {
+      const context: RunContext = {
+        ...EMPTY_CONTEXT,
+        role: "body",
+        depth,
+        writingDirection: direction ?? markdownBlockDirection(node),
+      };
+      appendInlineChildren(runs, node, context);
+      return appendBlockTerminator(runs, context);
+    }
   }
 }
 
@@ -750,8 +849,9 @@ export function nativeMarkdownChunkSpacing(
 export function nativeMarkdownDocumentRuns(
   node: MarkdownNode,
   skills: ReadonlyArray<SelectableMarkdownSkill> = [],
+  direction?: MarkdownWritingDirection,
 ): ReadonlyArray<NativeMarkdownTextRun> {
-  const runs = appendDocumentBlock([], node);
+  const runs = appendDocumentBlock([], node, 0, direction);
   while (runs.length > 0) {
     const lastIndex = runs.length - 1;
     const last = runs[lastIndex];

@@ -35,8 +35,13 @@ static void T3MarkdownTextApplyParagraphStyles(
     paragraphStyle.firstLineHeadIndent = styleRange.firstLineHeadIndent;
     paragraphStyle.headIndent = styleRange.headIndent;
     paragraphStyle.paragraphSpacing = styleRange.paragraphSpacing;
+    if (styleRange.rtl) {
+      paragraphStyle.baseWritingDirection = NSWritingDirectionRightToLeft;
+    }
+    // Must match applyParagraphStyles in T3MarkdownTextShadowNode.mm (measure path).
     paragraphStyle.tabStops = @[
-      [[NSTextTab alloc] initWithTextAlignment:NSTextAlignmentLeft
+      [[NSTextTab alloc] initWithTextAlignment:styleRange.rtl ? NSTextAlignmentRight
+                                              : NSTextAlignmentLeft
                                       location:styleRange.headIndent
                                        options:@{}]
     ];
