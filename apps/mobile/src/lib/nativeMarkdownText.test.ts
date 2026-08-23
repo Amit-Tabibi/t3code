@@ -178,14 +178,15 @@ describe("nativeMarkdownDocumentRuns", () => {
     };
 
     expect(nativeMarkdownDocumentRuns(node, [{ name: "ui", displayName: "UI" }])).toEqual([
-      { text: "Use ", role: "body" },
+      { text: "Use ", role: "body", writingDirection: "ltr" },
       {
         text: "$ui",
         role: "body",
         skillName: "ui",
         skillLabel: "UI",
+        writingDirection: "ltr",
       },
-      { text: " for this.", role: "body" },
+      { text: " for this.", role: "body", writingDirection: "ltr" },
     ]);
   });
 
@@ -205,6 +206,7 @@ describe("nativeMarkdownDocumentRuns", () => {
       role: "body",
       skillName: "ui",
       skillLabel: "UI",
+      writingDirection: "ltr",
     });
   });
 
@@ -220,7 +222,7 @@ describe("nativeMarkdownDocumentRuns", () => {
     };
 
     expect(nativeMarkdownDocumentRuns(node, [])).toEqual([
-      { text: "Use $unknown for this.", role: "body" },
+      { text: "Use $unknown for this.", role: "body", writingDirection: "ltr" },
     ]);
   });
 
@@ -276,11 +278,13 @@ describe("nativeMarkdownDocumentRuns", () => {
       text: "Header One\n",
       role: "heading",
       headingLevel: 1,
+      writingDirection: "ltr",
     });
     expect(runs).toContainEqual({
       text: "bold text",
       bold: true,
       role: "body",
+      writingDirection: "ltr",
     });
     expect(runs).toContainEqual({
       text: "•\t",
@@ -289,6 +293,7 @@ describe("nativeMarkdownDocumentRuns", () => {
       firstLineHeadIndent: 0,
       headIndent: 24,
       paragraphSpacing: 2,
+      writingDirection: "ltr",
     });
   });
 
@@ -355,11 +360,12 @@ describe("nativeMarkdownDocumentRuns", () => {
         firstLineHeadIndent: 0,
         headIndent: 24,
         paragraphSpacing: 2,
+        writingDirection: "ltr",
       },
-      { text: "Finding:", bold: true, role: "body", depth: 1 },
-      { text: " details with ", role: "body", depth: 1 },
-      { text: "inline code", code: true, role: "body", depth: 1 },
-      { text: ".", role: "body", depth: 1 },
+      { text: "Finding:", bold: true, role: "body", depth: 1, writingDirection: "ltr" },
+      { text: " details with ", role: "body", depth: 1, writingDirection: "ltr" },
+      { text: "inline code", code: true, role: "body", depth: 1, writingDirection: "ltr" },
+      { text: ".", role: "body", depth: 1, writingDirection: "ltr" },
     ]);
   });
 
@@ -390,6 +396,7 @@ describe("nativeMarkdownDocumentRuns", () => {
       text: "const answer = 42;",
       code: true,
       role: "code-block",
+      writingDirection: "ltr",
     });
   });
 

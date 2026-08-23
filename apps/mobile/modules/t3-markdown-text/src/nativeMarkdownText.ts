@@ -86,6 +86,33 @@ export function firstStrongDirection(text: string): MarkdownWritingDirection {
   return letter && STRONG_RTL_CHAR.test(letter) ? "rtl" : "ltr";
 }
 
+// The tech tokens a Hebrew sentence often *opens* with — a URL, an inline-code
+// span, a path, a file name ("server.py זה הקובץ הראשי"). Their Latin letters
+// are identifiers, not prose, so they must not get the first-strong vote.
+// Mirrors the web app's pattern (each app keeps its own copy — no cross-app
+// imports) and stripLeadingLTR from the claude-desktop-rtl-patch.
+const LTR_TECH_TOKEN = /https?:\/\/\S+|`[^`\n]+`|\S*[/\\]\S+|\b\w+\.\w{1,5}\b/gu;
+
+function stripLtrTechTokens(text: string): string {
+  // A token carrying its own strong-RTL letters (an RTL slash pair like כן/לא)
+  // is prose, not a tech identifier — it keeps its vote.
+  return text.replace(LTR_TECH_TOKEN, (token) => (STRONG_RTL_CHAR.test(token) ? token : " "));
+}
+
+// First-strong, with one correction: text that *leads* with a Latin tech token
+// but is otherwise RTL prose re-runs first-strong with those tokens stripped.
+// A mostly-English text with one Hebrew word stays LTR — the stripped re-run
+// still leads with its English words.
+export function resolvedTextDirection(text: string): MarkdownWritingDirection {
+  if (firstStrongDirection(text) === "rtl") {
+    return "rtl";
+  }
+  if (!STRONG_RTL_CHAR.test(text)) {
+    return "ltr";
+  }
+  return firstStrongDirection(stripLtrTechTokens(text));
+}
+
 // Code and tables opt out of direction detection and stay LTR: their shape is not
 // prose, so their letters must not decide the direction of the block around them —
 // the same nodes the web app pins with an explicit `dir="ltr"` (which `dir="auto"`
@@ -107,9 +134,12 @@ function directionSourceText(node: MarkdownNode): string {
 }
 
 // The base direction of a markdown block, resolved from the block's own first
-// strong letter (mirroring the web renderer's per-block `dir="auto"`).
+// strong letter (mirroring the web renderer's per-block `dir="auto"`) — with
+// leading Latin tech tokens discounted. Code spans are already excluded
+// structurally by directionSourceText; URLs, paths and file names living in
+// plain text are handled by the strip fallback.
 export function markdownBlockDirection(node: MarkdownNode): MarkdownWritingDirection {
-  return firstStrongDirection(directionSourceText(node));
+  return resolvedTextDirection(directionSourceText(node));
 }
 
 function decodeCodePoint(codePoint: number, entity: string): string {

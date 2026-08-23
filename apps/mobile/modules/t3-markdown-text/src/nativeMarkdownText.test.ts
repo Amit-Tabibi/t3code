@@ -5,6 +5,7 @@ import {
   firstStrongDirection,
   markdownBlockDirection,
   nativeMarkdownDocumentRuns,
+  resolvedTextDirection,
 } from "./nativeMarkdownText";
 
 const HEBREW_MIXED = "שלום, זה טקסט בעברית עם מונח באנגלית כמו Claude Code בתוכו.";
@@ -47,7 +48,49 @@ describe("firstStrongDirection", () => {
   });
 });
 
+describe("resolvedTextDirection", () => {
+  it("reads Hebrew that opens with a URL right-to-left", () => {
+    expect(resolvedTextDirection("https://claude.ai זה האתר של קלוד")).toBe("rtl");
+  });
+
+  it("reads Hebrew that opens with a file name right-to-left", () => {
+    expect(resolvedTextDirection("server.py זה הקובץ הראשי")).toBe("rtl");
+  });
+
+  it("reads Hebrew that opens with a path right-to-left", () => {
+    expect(resolvedTextDirection("src/main.ts זה הקובץ שצריך לערוך")).toBe("rtl");
+  });
+
+  it("reads Hebrew that opens with an inline-code span right-to-left", () => {
+    expect(resolvedTextDirection("`git status` תריץ קודם")).toBe("rtl");
+  });
+
+  it("keeps English with one Hebrew word left-to-right", () => {
+    expect(resolvedTextDirection("The word שלום means hello")).toBe("ltr");
+  });
+
+  it("keeps pure English left-to-right", () => {
+    expect(resolvedTextDirection("Hello world")).toBe("ltr");
+  });
+
+  it("keeps Hebrew-first text right-to-left, unchanged", () => {
+    expect(resolvedTextDirection(HEBREW_MIXED)).toBe("rtl");
+  });
+
+  it("keeps plain English words before Hebrew left-to-right (no tech token)", () => {
+    // Only tech tokens are discounted; leading English *words* still decide.
+    expect(resolvedTextDirection("Claude Code זה כלי")).toBe("ltr");
+  });
+});
+
 describe("markdownBlockDirection", () => {
+  it("discounts a leading file name in plain paragraph text", () => {
+    expect(markdownBlockDirection(paragraph(text("server.py זה הקובץ הראשי")))).toBe("rtl");
+  });
+
+  it("discounts a leading URL in plain paragraph text", () => {
+    expect(markdownBlockDirection(paragraph(text("https://claude.ai האתר של קלוד")))).toBe("rtl");
+  });
   it("reads the block's own text content", () => {
     expect(markdownBlockDirection(paragraph(text("שלום")))).toBe("rtl");
     expect(markdownBlockDirection(paragraph(text("Hello")))).toBe("ltr");
