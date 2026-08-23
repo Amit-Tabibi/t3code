@@ -291,6 +291,7 @@ function extractPreCodeMeta(node: unknown): string | undefined {
 type MarkdownAstNode = {
   type?: string;
   meta?: unknown;
+  value?: string;
   data?: {
     hProperties?: Record<string, unknown>;
   };
@@ -363,7 +364,22 @@ const AUTO_DIRECTION_NODE_TYPES = new Set([
 ]);
 const LTR_DIRECTION_NODE_TYPES = new Set(["code", "inlineCode", "table"]);
 
-function setDirection(node: MarkdownAstNode, dir: "auto" | "ltr") {
+/**
+ * The text a block's direction is judged from: its own prose, with the
+ * LTR-pinned nodes (inline code, fences, tables) excluded structurally —
+ * `dir="auto"` skips them too, since they carry their own `dir`.
+ */
+function directionDetectionText(node: MarkdownAstNode): string {
+  if (LTR_DIRECTION_NODE_TYPES.has(node.type ?? "")) {
+    return "";
+  }
+  if (typeof node.value === "string") {
+    return node.value;
+  }
+  return (node.children ?? []).map(directionDetectionText).join("");
+}
+
+function setDirection(node: MarkdownAstNode, dir: "auto" | "ltr" | "rtl") {
   node.data = {
     ...node.data,
     hProperties: {
@@ -402,7 +418,19 @@ function remarkTextDirection() {
       const isAutoBlock =
         !insideAutoBlock && !isAlertBlockquote && AUTO_DIRECTION_NODE_TYPES.has(type);
       if (isAutoBlock) {
-        setDirection(node, "auto");
+        // `dir="auto"` (and the `plaintext` CSS) is the browser's own first-strong
+        // scan, which cannot discount a leading Latin tech token — "server.py זה
+        // הקובץ" resolves LTR. When the heuristic disagrees with plain first-strong,
+        // pin the block with an explicit `dir="rtl"` (index.css lifts `plaintext`
+        // for it); everywhere else the browser keeps resolving the block itself.
+        const detectionText = directionDetectionText(node);
+        setDirection(
+          node,
+          firstStrongDirection(detectionText) === "ltr" &&
+            resolvedTextDirection(detectionText) === "rtl"
+            ? "rtl"
+            : "auto",
+        );
       }
       node.children?.forEach((child) => visit(child, insideAutoBlock || isAutoBlock));
     };
@@ -477,10 +505,39 @@ export function firstStrongDirection(text: string): TextDirection {
   return letter && STRONG_RTL_CHAR.test(letter) ? "rtl" : "ltr";
 }
 
+// The tech tokens a Hebrew sentence often *opens* with — a URL, an inline-code
+// span, a path, a file name ("server.py זה הקובץ הראשי"). Their Latin letters
+// are identifiers, not prose, so they must not get the first-strong vote.
+// Mirrors the mobile app's pattern (each app keeps its own copy — no cross-app
+// imports) and stripLeadingLTR from the claude-desktop-rtl-patch.
+const LTR_TECH_TOKEN = /https?:\/\/\S+|`[^`\n]+`|\S*[/\\]\S+|\b\w+\.\w{1,5}\b/gu;
+
+function stripLtrTechTokens(text: string): string {
+  // A token carrying its own strong-RTL letters (an RTL slash pair like כן/לא)
+  // is prose, not a tech identifier — it keeps its vote.
+  return text.replace(LTR_TECH_TOKEN, (token) => (STRONG_RTL_CHAR.test(token) ? token : " "));
+}
+
+// First-strong, with one correction: text that *leads* with a Latin tech token
+// but is otherwise RTL prose re-runs first-strong with those tokens stripped.
+// A mostly-English text with one Hebrew word stays LTR — the stripped re-run
+// still leads with its English words.
+export function resolvedTextDirection(text: string): TextDirection {
+  if (firstStrongDirection(text) === "rtl") {
+    return "rtl";
+  }
+  if (!STRONG_RTL_CHAR.test(text)) {
+    return "ltr";
+  }
+  return firstStrongDirection(stripLtrTechTokens(text));
+}
+
 function hastTextContent(node: unknown): string {
   if (!node || typeof node !== "object") return "";
-  const n = node as { type?: string; value?: string; children?: unknown[] };
+  const n = node as { type?: string; tagName?: string; value?: string; children?: unknown[] };
   if (n.type === "text") return n.value ?? "";
+  // Code is direction-neutral here too, mirroring the mdast-side exclusion.
+  if (n.tagName === "code") return "";
   return (n.children ?? []).map(hastTextContent).join("");
 }
 
@@ -1858,7 +1915,7 @@ function ChatMarkdown({
         );
       },
       table({ node, dir: _dir, ...props }) {
-        return <MarkdownTable dir={firstStrongDirection(hastTextContent(node))} {...props} />;
+        return <MarkdownTable dir={resolvedTextDirection(hastTextContent(node))} {...props} />;
       },
       details({ node: _node, children, open: detailsOpen }) {
         return <MarkdownDetails open={detailsOpen}>{children}</MarkdownDetails>;

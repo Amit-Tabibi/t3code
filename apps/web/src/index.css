@@ -1988,6 +1988,17 @@ code {
   unicode-bidi: plaintext;
 }
 
+/* A block ChatMarkdown.tsx pinned `dir="rtl"`: RTL prose that *opens* with a
+   Latin tech token (a URL, a path, `server.py`), which the browser's own
+   first-strong scan would misread as LTR. `plaintext` ignores the `dir`
+   attribute, so the pinned block — and the plaintext leaves inside a pinned
+   list or quote, which would otherwise re-resolve themselves line by line —
+   falls back to `isolate` and inherits the pinned direction. */
+.chat-markdown [dir="rtl"],
+.chat-markdown [dir="rtl"] :is(p, li, h1, h2, h3, h4, h5, h6, td, th, dt, dd) {
+  unicode-bidi: isolate;
+}
+
 .chat-markdown pre,
 .chat-markdown code,
 .chat-markdown .chat-markdown-codeblock {
