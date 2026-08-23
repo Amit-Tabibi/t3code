@@ -2,6 +2,7 @@ import { TextInputWrapper } from "expo-paste-input";
 import { useImperativeHandle, useRef } from "react";
 import { TextInput, type TextInput as RNTextInput } from "react-native";
 
+import { firstStrongDirection } from "@t3tools/mobile-markdown-text/markdown";
 import { useThemeColor } from "../lib/useThemeColor";
 import { useFontFamily } from "../lib/useFontFamily";
 import { useScaledTextRole } from "../features/settings/appearance/useScaledTextRole";
@@ -25,6 +26,10 @@ export function ComposerEditor({
   const placeholderColor = useThemeColor("--color-placeholder");
   const fontFamily = useFontFamily("regular");
   const handlePaste = useNativePaste((uris) => onPasteImages?.(uris));
+  // Live composer direction: the draft's first strong letter decides (plain
+  // first-strong — while typing, follow what the user actually typed; empty
+  // resets to LTR). `writingDirection` is iOS-only; `textAlign` covers both.
+  const writingDirection = firstStrongDirection(props.value);
 
   useImperativeHandle(
     ref,
@@ -54,6 +59,8 @@ export function ComposerEditor({
             fontFamily,
             ...bodyText,
             paddingVertical: contentInsetVertical,
+            textAlign: writingDirection === "rtl" ? "right" : "left",
+            writingDirection,
           },
           textStyle,
         ]}

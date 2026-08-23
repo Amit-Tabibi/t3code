@@ -14,6 +14,7 @@ import { Image, StyleSheet } from "react-native";
 
 import { markdownFileIconSource } from "@t3tools/mobile-markdown-text/file-icons";
 import { resolveMarkdownFileIcon } from "@t3tools/mobile-markdown-text/links";
+import { firstStrongDirection } from "@t3tools/mobile-markdown-text/markdown";
 import { useThemeColor } from "../lib/useThemeColor";
 import { useFontFamily } from "../lib/useFontFamily";
 import { useScaledTextRole } from "../features/settings/appearance/useScaledTextRole";
@@ -61,6 +62,7 @@ interface NativeComposerEditorProps extends ViewProps {
   readonly fontSize: number;
   readonly lineHeight: number;
   readonly contentInsetVertical: number;
+  readonly writingDirection: "ltr" | "rtl";
   readonly editable: boolean;
   readonly scrollEnabled: boolean;
   readonly autoFocus: boolean;
@@ -250,6 +252,10 @@ export function ComposerEditor({
           : bodyText.lineHeight
       }
       contentInsetVertical={contentInsetVertical}
+      // Live composer direction: the draft's first strong letter decides
+      // (plain first-strong, no tech-token stripping — while typing, follow
+      // what the user actually typed; empty resets to LTR).
+      writingDirection={firstStrongDirection(props.value)}
       editable={props.editable ?? true}
       scrollEnabled={props.scrollEnabled ?? true}
       autoFocus={props.autoFocus ?? false}
