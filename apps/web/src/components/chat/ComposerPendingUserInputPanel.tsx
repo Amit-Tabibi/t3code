@@ -7,6 +7,7 @@ import {
 } from "../../pendingUserInput";
 import { CheckIcon, ChevronDownIcon } from "lucide-react";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
+import { resolvedTextDirection } from "../ChatMarkdown";
 import { cn } from "~/lib/utils";
 
 interface PendingUserInputPanelProps {
@@ -187,7 +188,10 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
           data-pending-user-input-toggle={isCollapsed ? "collapsed" : "expanded"}
           className="group -my-1 flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left outline-none transition-colors duration-150 hover:bg-muted/35 focus-visible:ring-1 focus-visible:ring-primary/25"
         >
-          <span className="text-xs font-medium text-muted-foreground group-hover:text-foreground/85">
+          <span
+            dir={resolvedTextDirection(activeQuestion.header)}
+            className="text-xs font-medium text-muted-foreground group-hover:text-foreground/85"
+          >
             {activeQuestion.header}
           </span>
           {prompt.questions.length > 1 ? (
@@ -199,7 +203,10 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
               counter, so the question itself is echoed here as a one-line
               reminder of what is being asked. */}
           {isCollapsed ? (
-            <span className="min-w-0 flex-1 truncate text-secondary-label text-xs">
+            <span
+              dir={resolvedTextDirection(activeQuestion.question)}
+              className="min-w-0 flex-1 truncate text-secondary-label text-xs"
+            >
               {activeQuestion.question}
             </span>
           ) : null}
@@ -219,7 +226,15 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
           that padding or their focus rings get shaved off at the edges. */}
       <CollapsiblePanel className="px-3 sm:px-4">
         <div className="pt-2 pb-0.5">
-          <p className="text-sm text-foreground/85">{activeQuestion.question}</p>
+          {/* The question and its options are agent-authored prose, so each
+              string resolves its own direction — a Hebrew question reads and
+              aligns right-to-left while the panel chrome stays put. */}
+          <p
+            dir={resolvedTextDirection(activeQuestion.question)}
+            className="text-sm text-foreground/85"
+          >
+            {activeQuestion.question}
+          </p>
           {activeQuestion.multiSelect ? (
             <p className="mt-1 text-secondary-label text-xs">Select one or more options.</p>
           ) : null}
@@ -243,9 +258,16 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
               const content = (
                 <>
                   <div className="min-w-0 flex-1 flex flex-col gap-0.5">
-                    <span className="text-sm font-medium">{option.label}</span>
+                    <span dir={resolvedTextDirection(option.label)} className="text-sm font-medium">
+                      {option.label}
+                    </span>
                     {option.description && option.description !== option.label ? (
-                      <span className="text-secondary-label text-[11px]">{option.description}</span>
+                      <span
+                        dir={resolvedTextDirection(option.description)}
+                        className="text-secondary-label text-[11px]"
+                      >
+                        {option.description}
+                      </span>
                     ) : null}
                   </div>
                   {isSelected ? (
