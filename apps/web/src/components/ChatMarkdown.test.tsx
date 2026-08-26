@@ -162,8 +162,17 @@ describe("resolvedTextDirection", () => {
   it("keeps English text left-to-right, one Hebrew word or none", () => {
     expect(resolvedTextDirection("The word שלום means hello")).toBe("ltr");
     expect(resolvedTextDirection("Hello world")).toBe("ltr");
-    // Only tech tokens are discounted; leading English *words* still decide.
+    // Latin letters hold the majority here, so the leading English words decide.
     expect(resolvedTextDirection("Claude Code זה כלי")).toBe("ltr");
+  });
+
+  it("reads a Hebrew sentence that opens with a Latin prose label right-to-left", () => {
+    expect(
+      resolvedTextDirection('Next step (ישן): "מתחילים לבנות תחנה 1, לאט. החוסמים: 3 קבצים."'),
+    ).toBe("rtl");
+    expect(resolvedTextDirection("TL;DR: הפיצ׳ר עובד, נשאר רק לנקות את הקוד")).toBe("rtl");
+    // A Latin-majority sentence quoting some Hebrew still reads left-to-right.
+    expect(resolvedTextDirection("The customer wrote שלום וברכה in the ticket")).toBe("ltr");
   });
 
   it("keeps Hebrew-first text right-to-left, unchanged", () => {

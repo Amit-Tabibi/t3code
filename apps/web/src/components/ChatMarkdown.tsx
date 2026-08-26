@@ -518,10 +518,24 @@ function stripLtrTechTokens(text: string): string {
   return text.replace(LTR_TECH_TOKEN, (token) => (STRONG_RTL_CHAR.test(token) ? token : " "));
 }
 
-// First-strong, with one correction: text that *leads* with a Latin tech token
-// but is otherwise RTL prose re-runs first-strong with those tokens stripped.
-// A mostly-English text with one Hebrew word stays LTR — the stripped re-run
-// still leads with its English words.
+// The last-resort vote: which strong script owns most of the text's letters.
+// Counted per letter (`\p{L}`), so neutral digits/punctuation and RTL combining
+// marks (niqqud, harakat — marks, not letters) never tilt the tally.
+function rtlLetterMajority(text: string): boolean {
+  let balance = 0;
+  for (const letter of text.match(/\p{L}/gu) ?? []) {
+    balance += STRONG_RTL_CHAR.test(letter) ? 1 : -1;
+  }
+  return balance > 0;
+}
+
+// First-strong, with two corrections for RTL prose that *opens* with Latin:
+// a leading tech token (URL, path, file name) never gets the first-strong vote,
+// and a text whose letters are mostly RTL is RTL even when it leads with a
+// Latin prose label — "**Next step (ישן):** מתחילים לבנות…" is a Hebrew
+// sentence, and reading it LTR strands its closing punctuation on the wrong
+// side. A mostly-English text with a few Hebrew words stays LTR — its Latin
+// letters keep the majority.
 export function resolvedTextDirection(text: string): TextDirection {
   if (firstStrongDirection(text) === "rtl") {
     return "rtl";
@@ -529,7 +543,11 @@ export function resolvedTextDirection(text: string): TextDirection {
   if (!STRONG_RTL_CHAR.test(text)) {
     return "ltr";
   }
-  return firstStrongDirection(stripLtrTechTokens(text));
+  const stripped = stripLtrTechTokens(text);
+  if (firstStrongDirection(stripped) === "rtl") {
+    return "rtl";
+  }
+  return rtlLetterMajority(stripped) ? "rtl" : "ltr";
 }
 
 function hastTextContent(node: unknown): string {
