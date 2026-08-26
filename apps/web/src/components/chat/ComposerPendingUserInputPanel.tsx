@@ -186,7 +186,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
             isCollapsed ? "Show the question and its options" : "Hide the question and its options"
           }
           data-pending-user-input-toggle={isCollapsed ? "collapsed" : "expanded"}
-          className="group -my-1 flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left outline-none transition-colors duration-150 hover:bg-muted/35 focus-visible:ring-1 focus-visible:ring-primary/25"
+          className="group -my-1 flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-start outline-none transition-colors duration-150 hover:bg-muted/35 focus-visible:ring-1 focus-visible:ring-primary/25"
         >
           <span
             dir={resolvedTextDirection(activeQuestion.header)}
@@ -248,7 +248,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
                 (!customAnswerActive && progress.selectedOptionLabels.includes(option.label));
               const shortcutKey = index < 9 ? index + 1 : null;
               const className = cn(
-                "group flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left outline-none transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-primary/25",
+                "group flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-start outline-none transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-primary/25",
                 isSelected
                   ? "bg-muted/55 text-foreground"
                   : "bg-transparent text-foreground/85 hover:bg-muted/30",
