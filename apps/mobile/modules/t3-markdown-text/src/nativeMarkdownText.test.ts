@@ -90,6 +90,15 @@ describe("resolvedTextDirection", () => {
     // A Latin-majority sentence quoting some Hebrew still reads left-to-right.
     expect(resolvedTextDirection("The customer wrote שלום וברכה in the ticket")).toBe("ltr");
   });
+
+  it("discounts quoted and parenthesized Latin citations from the vote", () => {
+    expect(resolvedTextDirection('PROFILE — הוספתי סעיף "Build-feedback call additions"')).toBe(
+      "rtl",
+    );
+    expect(resolvedTextDirection("P1 — אסטרטגיות (product-lens):")).toBe("rtl");
+    // A Hebrew quotation inside English prose keeps its vote — still LTR.
+    expect(resolvedTextDirection('They titled it "ברוכים הבאים" and moved on quickly')).toBe("ltr");
+  });
 });
 
 describe("markdownBlockDirection", () => {
@@ -136,7 +145,7 @@ describe("nativeMarkdownDocumentRuns direction", () => {
     expect(english?.writingDirection).toBe("ltr");
   });
 
-  it("gives a Hebrew list one RTL direction, markers included", () => {
+  it("gives every list item its own direction, markers included", () => {
     const runs = nativeMarkdownDocumentRuns(
       document({
         type: "list",
@@ -147,12 +156,13 @@ describe("nativeMarkdownDocumentRuns direction", () => {
         ],
       }),
     );
-    // The outermost list decides once; every run inherits (web: only the
-    // outermost block carries dir="auto", items inherit).
-    for (const run of runs) {
-      expect(run.writingDirection).toBe("rtl");
-    }
-    expect(runs.some((run) => run.role === "list-marker")).toBe(true);
+    // Mixed lists keep each marker beside the text it labels (web: per-item dir).
+    const hebrewItem = runs.find((run) => run.text.includes("פריט"));
+    const englishItem = runs.find((run) => run.text.includes("English"));
+    expect(hebrewItem?.writingDirection).toBe("rtl");
+    expect(englishItem?.writingDirection).toBe("ltr");
+    const markers = runs.filter((run) => run.role === "list-marker");
+    expect(markers.map((run) => run.writingDirection)).toEqual(["rtl", "ltr"]);
   });
 
   it("inherits the outer direction into nested lists", () => {
@@ -178,6 +188,23 @@ describe("nativeMarkdownDocumentRuns direction", () => {
     for (const run of runs) {
       expect(run.writingDirection).toBe("rtl");
     }
+  });
+
+  it("isolates Latin runs inside RTL text so surrounding punctuation stays put", () => {
+    const runs = nativeMarkdownDocumentRuns(
+      document(paragraph(text('הבוט "סותר את Kapso" וגם U1+U2+U3+U5, ההסלמה'))),
+    );
+    const body = runs.find((run) => run.text.includes("Kapso"));
+    expect(body?.text).toContain("⁦Kapso⁩");
+    expect(body?.text).toContain("⁦U1+U2+U3+U5⁩");
+    // The closing quote and the comma stay outside the isolates.
+    expect(body?.text).toContain('⁦Kapso⁩"');
+    expect(body?.text).toContain("⁩, ההסלמה");
+  });
+
+  it("leaves LTR text without isolates", () => {
+    const runs = nativeMarkdownDocumentRuns(document(paragraph(text("Plain English text here"))));
+    expect(runs[0]?.text).not.toContain("⁦");
   });
 
   it("marks a Hebrew heading RTL", () => {

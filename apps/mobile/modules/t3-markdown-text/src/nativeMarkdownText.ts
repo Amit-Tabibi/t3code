@@ -86,16 +86,19 @@ export function firstStrongDirection(text: string): MarkdownWritingDirection {
   return letter && STRONG_RTL_CHAR.test(letter) ? "rtl" : "ltr";
 }
 
-// The tech tokens a Hebrew sentence often *opens* with — a URL, an inline-code
-// span, a path, a file name ("server.py זה הקובץ הראשי"). Their Latin letters
-// are identifiers, not prose, so they must not get the first-strong vote.
-// Mirrors the web app's pattern (each app keeps its own copy — no cross-app
-// imports) and stripLeadingLTR from the claude-desktop-rtl-patch.
-const LTR_TECH_TOKEN = /https?:\/\/\S+|`[^`\n]+`|\S*[/\\]\S+|\b\w+\.\w{1,5}\b/gu;
+// The Latin spans that must not get the direction vote: tech tokens a Hebrew
+// sentence often *opens* with (a URL, an inline-code span, a path, a file name
+// — "server.py זה הקובץ הראשי"), plus quoted or parenthesized Latin — a cited
+// title or gloss ('הוספתי סעיף "Build-feedback call additions"', "אסטרטגיות
+// (product-lens)") names a thing rather than continuing the prose. Mirrors the
+// web app's pattern (each app keeps its own copy — no cross-app imports) and
+// stripLeadingLTR from the claude-desktop-rtl-patch.
+const LTR_TECH_TOKEN =
+  /https?:\/\/\S+|`[^`\n]+`|\S*[/\\]\S+|\b\w+\.\w{1,5}\b|"[^"\n]+"|[“«][^”»\n]+[”»]|\([^()\n]+\)/gu;
 
 function stripLtrTechTokens(text: string): string {
-  // A token carrying its own strong-RTL letters (an RTL slash pair like כן/לא)
-  // is prose, not a tech identifier — it keeps its vote.
+  // A span carrying its own strong-RTL letters (an RTL slash pair like כן/לא,
+  // a Hebrew quotation) is prose, not a citation — it keeps its vote.
   return text.replace(LTR_TECH_TOKEN, (token) => (STRONG_RTL_CHAR.test(token) ? token : " "));
 }
 
@@ -364,13 +367,35 @@ function nodeTextContent(node: MarkdownNode): string {
   return (node.children ?? []).map(nodeTextContent).join("");
 }
 
+// Inside a right-to-left paragraph the bidi algorithm hands the neutrals around
+// a Latin run — quotes, commas, a plus sign — to whichever strong run is
+// nearer, which strands them on the wrong visual side ('"AIOS" סותר' flips its
+// quotes, "U1+U2+U3, ההסלמה" splits the comma off its run). Isolating each run
+// (LRI … PDI, the same isolate inline code uses) lets that punctuation resolve
+// against the Hebrew it belongs to. A run may span several words joined by
+// thin neutrals ("speed-to-lead", "U1+U2+U3+U5", "OpenAI export"); a connector
+// is only swallowed when another Latin word follows it, so sentence-final
+// punctuation stays outside the isolate. Mirrors the web app's <bdi> pass.
+const LATIN_RUN = /\p{Script=Latin}[\p{Script=Latin}\d]*(?:[ +&/.:'@_-]+[\p{Script=Latin}\d]+)*/gu;
+
+function isolateLatinRuns(text: string): string {
+  return text.replace(LATIN_RUN, (run) => `\u2066${run}\u2069`);
+}
+
 function appendNode(
   runs: NativeMarkdownTextRun[],
   node: MarkdownNode,
   context: RunContext,
 ): NativeMarkdownTextRun[] {
   switch (node.type) {
-    case "text":
+    case "text": {
+      const content = textNodeContent(nodeTextContent(node));
+      return appendRun(
+        runs,
+        context.writingDirection === "rtl" ? isolateLatinRuns(content) : content,
+        context,
+      );
+    }
     case "math_inline":
       return appendRun(runs, textNodeContent(nodeTextContent(node)), context);
     case "html_inline":
@@ -575,9 +600,10 @@ function appendList(
   runs: NativeMarkdownTextRun[],
   node: MarkdownNode,
   depth: number,
-  // A list takes one direction as a whole — the outermost block of a run decides
-  // and items inherit, so the markers stay on the same side as the text they label.
-  writingDirection: MarkdownWritingDirection,
+  // Each item resolves its own direction (a Hebrew item in an English list
+  // still gets its marker on the right, mirroring the web's per-item `dir`),
+  // unless the list sits inside an already-claimed block — then it inherits.
+  inheritedDirection?: MarkdownWritingDirection,
 ): NativeMarkdownTextRun[] {
   const ordered = node.ordered ?? false;
   const start = node.start ?? 1;
@@ -609,7 +635,14 @@ function appendList(
           : marker;
     const markerColumnWidth =
       child.type === "task_list_item" ? 28 : ordered ? 10 + markerWidth * 8 : 24;
-    appendListItem(runs, child, alignedMarker, depth, markerColumnWidth, writingDirection);
+    appendListItem(
+      runs,
+      child,
+      alignedMarker,
+      depth,
+      markerColumnWidth,
+      inheritedDirection ?? markdownBlockDirection(child),
+    );
   }
   return runs;
 }
@@ -736,7 +769,7 @@ function appendDocumentBlock(
       return appendBlockTerminator(runs, context);
     }
     case "list":
-      return appendList(runs, node, depth + 1, direction ?? markdownBlockDirection(node));
+      return appendList(runs, node, depth + 1, direction);
     case "blockquote":
       return appendQuoteBlock(runs, node, depth, direction ?? markdownBlockDirection(node));
     case "code_block": {
