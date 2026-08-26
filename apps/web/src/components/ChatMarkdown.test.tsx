@@ -342,7 +342,9 @@ describe("chat markdown text direction", () => {
     // The `code` renderer swaps the chip in for the `<code dir="ltr">` it
     // replaces, so a path in an Arabic sentence keeps its own reading order.
     const html = render("عدّل `src/main.ts` من فضلك.");
-    expect(html).toContain('<a dir="ltr"');
+    // The chip renders as an anchor or, with no primary action, a button —
+    // either way it carries the LTR pin.
+    expect(html).toMatch(/<(a|button)[^>]* dir="ltr"/);
   });
 
   it("gives a table its base direction from its own content, cells still self-resolve", () => {
