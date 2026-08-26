@@ -54,16 +54,19 @@ describe("chat markdown text direction", () => {
   it("marks headings, lists, and quotes so their markers follow the text", () => {
     const html = render("# عنوان\n\n- عنصر\n\n> اقتباس");
     expect(html).toContain('<h1 dir="auto">');
-    expect(html).toContain('<ul dir="auto">');
+    // The list's gutter side is pinned from all its items together.
+    expect(html).toContain('<ul dir="rtl">');
     expect(html).toContain('<blockquote dir="auto">');
   });
 
-  it("marks only the outermost block, so a container still sees its own text", () => {
-    // A nested `dir` would be skipped when the browser resolves the outer
-    // `dir="auto"`, leaving the list LTR and its bullets in the wrong gutter.
-    const html = render("- عنصر\n\n> اقتباس");
-    expect(html).toContain("<li>");
-    expect(html).not.toContain("<li dir=");
+  it("gives every list item its own direction, so mixed lists keep each marker beside its text", () => {
+    const html = render("- English item\n- פריט בעברית");
+    expect(html).toContain('<ul dir="ltr">');
+    expect(html).toContain('<li dir="auto">');
+  });
+
+  it("does not re-mark the blocks inside a claimed quote", () => {
+    const html = render("> اقتباس");
     expect(html).not.toContain('<blockquote dir="auto">\n<p dir="auto">');
   });
 
@@ -145,6 +148,28 @@ describe("chat markdown text direction", () => {
     expect(html).not.toContain('<p dir="rtl">');
   });
 
+  it("isolates a Latin run inside RTL prose so its quotes stay on the right sides", () => {
+    const html = render('הבוט "סותר את Kapso" לגמרי');
+    expect(html).toContain("<bdi>Kapso</bdi>");
+  });
+
+  it("keeps a compound Latin run whole inside one isolate", () => {
+    const html = render("דמו = U1+U2+U3+U5, ההסלמה אחרי");
+    expect(html).toContain("<bdi>U1+U2+U3+U5</bdi>");
+  });
+
+  it("leaves English blocks and code untouched by the isolation pass", () => {
+    const html = render("Plain English `code span` here");
+    expect(html).not.toContain("<bdi>");
+    const rtlWithCode = render("תריץ `git status` עכשיו");
+    expect(rtlWithCode).toContain('<code data-inline-code="" dir="ltr">git status</code>');
+  });
+
+  it("keeps a link atomic inside RTL prose instead of slicing it into isolates", () => {
+    const html = render("הקישור https://claude.ai/docs זה טוב");
+    expect(html).not.toContain("<bdi>https");
+  });
+
   it("gives a table opening with a tech-token cell its direction from its prose", () => {
     const html = render("| `id.ts` | שם |\n| --- | --- |\n| `a.py` | קובץ |");
     expect(html).toContain('dir="rtl"');
@@ -173,6 +198,15 @@ describe("resolvedTextDirection", () => {
     expect(resolvedTextDirection("TL;DR: הפיצ׳ר עובד, נשאר רק לנקות את הקוד")).toBe("rtl");
     // A Latin-majority sentence quoting some Hebrew still reads left-to-right.
     expect(resolvedTextDirection("The customer wrote שלום וברכה in the ticket")).toBe("ltr");
+  });
+
+  it("discounts quoted and parenthesized Latin citations from the vote", () => {
+    expect(resolvedTextDirection('PROFILE — הוספתי סעיף "Build-feedback call additions"')).toBe(
+      "rtl",
+    );
+    expect(resolvedTextDirection("P1 — אסטרטגיות (product-lens):")).toBe("rtl");
+    // A Hebrew quotation inside English prose keeps its vote — still LTR.
+    expect(resolvedTextDirection('They titled it "ברוכים הבאים" and moved on quickly')).toBe("ltr");
   });
 
   it("keeps Hebrew-first text right-to-left, unchanged", () => {

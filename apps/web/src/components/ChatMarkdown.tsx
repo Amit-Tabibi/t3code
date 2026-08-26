@@ -209,9 +209,105 @@ const CHAT_MARKDOWN_REMARK_PLUGINS_WITH_BREAKS = [
   remarkTextDirection,
 ] satisfies NonNullable<ReactMarkdownOptions["remarkPlugins"]>;
 
+// Inside a right-to-left block the bidi algorithm hands the neutrals around a
+// Latin run — quotes, commas, a plus sign — to whichever strong run is nearer,
+// which strands them on the wrong visual side ('"AIOS" סותר' flips its quotes,
+// "U1+U2+U3, ההסלמה" splits the comma off its run). Wrapping each Latin run in
+// a <bdi> isolates it, so the punctuation around it resolves against the
+// Hebrew it belongs to. A run may span several words joined by thin neutrals
+// ("speed-to-lead", "U1+U2+U3+U5", "OpenAI export"); a connector is only
+// swallowed when another Latin word follows it, so sentence-final punctuation
+// stays outside the isolate.
+const LATIN_RUN = /\p{Script=Latin}[\p{Script=Latin}\d]*(?:[ +&/.:'@_-]+[\p{Script=Latin}\d]+)*/gu;
+const BIDI_LEAF_TAG_NAMES = new Set([
+  "p",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "td",
+  "th",
+  "li",
+  "dt",
+  "dd",
+]);
+// Links stay atomic: an anchor's text is usually a URL or a title whose own
+// strong letters already resolve as one run — slicing it into isolates would
+// let the neutrals between the pieces reorder against the paragraph.
+const BIDI_SKIP_TAG_NAMES = new Set(["a", "code", "pre", "bdi", "bdo"]);
+
+type HastNode = {
+  type?: string;
+  tagName?: string;
+  value?: string;
+  properties?: Record<string, unknown>;
+  children?: HastNode[];
+};
+
+function splitTextIntoIsolates(value: string): HastNode[] {
+  const out: HastNode[] = [];
+  let last = 0;
+  for (const match of value.matchAll(LATIN_RUN)) {
+    const start = match.index ?? 0;
+    if (start > last) {
+      out.push({ type: "text", value: value.slice(last, start) });
+    }
+    out.push({
+      type: "element",
+      tagName: "bdi",
+      properties: {},
+      children: [{ type: "text", value: match[0] }],
+    });
+    last = start + match[0].length;
+  }
+  if (last === 0) {
+    return [{ type: "text", value }];
+  }
+  if (last < value.length) {
+    out.push({ type: "text", value: value.slice(last) });
+  }
+  return out;
+}
+
+function isolateLatinRuns(node: HastNode) {
+  if (!node.children) {
+    return;
+  }
+  node.children = node.children.flatMap((child): HastNode[] => {
+    if (child.type === "text" && typeof child.value === "string") {
+      return splitTextIntoIsolates(child.value);
+    }
+    if (child.type === "element" && BIDI_SKIP_TAG_NAMES.has(child.tagName ?? "")) {
+      return [child];
+    }
+    isolateLatinRuns(child);
+    return [child];
+  });
+}
+
+function rehypeIsolateLatinRuns() {
+  return (tree: HastNode) => {
+    const visit = (node: HastNode) => {
+      if (
+        node.type === "element" &&
+        BIDI_LEAF_TAG_NAMES.has(node.tagName ?? "") &&
+        resolvedTextDirection(hastTextContent(node)) === "rtl"
+      ) {
+        isolateLatinRuns(node);
+        return;
+      }
+      node.children?.forEach(visit);
+    };
+    visit(tree);
+  };
+}
+
 const CHAT_MARKDOWN_REHYPE_PLUGINS = [
   rehypeRaw,
   [rehypeSanitize, CHAT_MARKDOWN_SANITIZE_SCHEMA],
+  rehypeIsolateLatinRuns,
 ] satisfies NonNullable<ReactMarkdownOptions["rehypePlugins"]>;
 
 /** GitHub's own five alert kinds, in its colors: the glyph names the urgency, the title says it. */
@@ -358,7 +454,7 @@ function remarkTagInlineCode() {
 const AUTO_DIRECTION_NODE_TYPES = new Set([
   "blockquote",
   "heading",
-  "list",
+  "listItem",
   "paragraph",
   "tableCell",
 ]);
@@ -392,14 +488,13 @@ function setDirection(node: MarkdownAstNode, dir: "auto" | "ltr" | "rtl") {
 function remarkTextDirection() {
   return (tree: MarkdownAstNode) => {
     // `dir="auto"` reads the first strong character of an element's *own* text
-    // and skips any descendant that carries its own `dir`. So only the outermost
-    // block of a run gets marked: marking a list and its items both would leave
-    // the list itself with no text to judge, fall back to LTR, and paint the
-    // bullets of an RTL item into a gutter that is no longer on that side.
-    //
-    // The cost is that one list reads in one direction. A list that mixes an
-    // Arabic item with an English one takes the direction of its first item,
-    // which is the trade for markers that stay next to the text they label.
+    // and skips any descendant that carries its own `dir`. Blocks below a marked
+    // one are normally left alone (the `plaintext` CSS lets each resolve its own
+    // text), with two exceptions: every list item is marked so a Hebrew item in
+    // an English list still gets its bullet in the right-hand gutter (a marker's
+    // side follows the `direction` property, which only a `dir` attribute
+    // flips), and a leaf whose heuristic disagrees with its own first-strong
+    // scan is pinned, since `plaintext` cannot discount a leading Latin token.
     const visit = (node: MarkdownAstNode, insideAutoBlock: boolean) => {
       const type = node.type ?? "";
       if (LTR_DIRECTION_NODE_TYPES.has(type)) {
@@ -410,14 +505,24 @@ function remarkTextDirection() {
         return;
       }
 
+      if (type === "list") {
+        // Each item claims its own direction below, which leaves the list
+        // element itself no text for `dir="auto"` to judge — so its gutter
+        // side is pinned explicitly from all the items together.
+        if (!insideAutoBlock) {
+          setDirection(node, resolvedTextDirection(directionDetectionText(node)));
+        }
+        node.children?.forEach((child) => visit(child, insideAutoBlock));
+        return;
+      }
+
       // A GitHub alert is rendered as a titled callout rather than a quote, and
       // its own renderer builds that chrome from scratch. Claiming the block
       // here would strand its body: the `dir` never reaches the callout, and the
       // paragraphs inside it would have been skipped as already-covered.
       const isAlertBlockquote = type === "blockquote" && node.data?.hProperties?.dataAlert != null;
-      const isAutoBlock =
-        !insideAutoBlock && !isAlertBlockquote && AUTO_DIRECTION_NODE_TYPES.has(type);
-      if (isAutoBlock) {
+      const isDirectionBlock = !isAlertBlockquote && AUTO_DIRECTION_NODE_TYPES.has(type);
+      if (isDirectionBlock && !insideAutoBlock) {
         // `dir="auto"` (and the `plaintext` CSS) is the browser's own first-strong
         // scan, which cannot discount a leading Latin tech token — "server.py זה
         // הקובץ" resolves LTR. When the heuristic disagrees with plain first-strong,
@@ -431,8 +536,21 @@ function remarkTextDirection() {
             ? "rtl"
             : "auto",
         );
+      } else if (isDirectionBlock && insideAutoBlock) {
+        // Inside a claimed block the `plaintext` CSS still re-resolves each
+        // leaf from its own text — pin just the leaves whose leading Latin
+        // token would make that scan misread otherwise-RTL prose.
+        const detectionText = directionDetectionText(node);
+        if (
+          firstStrongDirection(detectionText) === "ltr" &&
+          resolvedTextDirection(detectionText) === "rtl"
+        ) {
+          setDirection(node, "rtl");
+        }
       }
-      node.children?.forEach((child) => visit(child, insideAutoBlock || isAutoBlock));
+      node.children?.forEach((child) =>
+        visit(child, insideAutoBlock || (isDirectionBlock && !insideAutoBlock)),
+      );
     };
 
     visit(tree, false);
@@ -505,16 +623,19 @@ export function firstStrongDirection(text: string): TextDirection {
   return letter && STRONG_RTL_CHAR.test(letter) ? "rtl" : "ltr";
 }
 
-// The tech tokens a Hebrew sentence often *opens* with — a URL, an inline-code
-// span, a path, a file name ("server.py זה הקובץ הראשי"). Their Latin letters
-// are identifiers, not prose, so they must not get the first-strong vote.
-// Mirrors the mobile app's pattern (each app keeps its own copy — no cross-app
-// imports) and stripLeadingLTR from the claude-desktop-rtl-patch.
-const LTR_TECH_TOKEN = /https?:\/\/\S+|`[^`\n]+`|\S*[/\\]\S+|\b\w+\.\w{1,5}\b/gu;
+// The Latin spans that must not get the direction vote: tech tokens a Hebrew
+// sentence often *opens* with (a URL, an inline-code span, a path, a file name
+// — "server.py זה הקובץ הראשי"), plus quoted or parenthesized Latin — a cited
+// title or gloss ('הוספתי סעיף "Build-feedback call additions"', "אסטרטגיות
+// (product-lens)") names a thing rather than continuing the prose. Mirrors the
+// mobile app's pattern (each app keeps its own copy — no cross-app imports)
+// and stripLeadingLTR from the claude-desktop-rtl-patch.
+const LTR_TECH_TOKEN =
+  /https?:\/\/\S+|`[^`\n]+`|\S*[/\\]\S+|\b\w+\.\w{1,5}\b|"[^"\n]+"|[“«][^”»\n]+[”»]|\([^()\n]+\)/gu;
 
 function stripLtrTechTokens(text: string): string {
-  // A token carrying its own strong-RTL letters (an RTL slash pair like כן/לא)
-  // is prose, not a tech identifier — it keeps its vote.
+  // A span carrying its own strong-RTL letters (an RTL slash pair like כן/לא,
+  // a Hebrew quotation) is prose, not a citation — it keeps its vote.
   return text.replace(LTR_TECH_TOKEN, (token) => (STRONG_RTL_CHAR.test(token) ? token : " "));
 }
 
