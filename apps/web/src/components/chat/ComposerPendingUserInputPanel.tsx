@@ -5,10 +5,11 @@ import {
   derivePendingUserInputProgress,
   type PendingUserInputDraftAnswer,
 } from "../../pendingUserInput";
-import { CheckIcon, ChevronDownIcon } from "lucide-react";
+import { CheckIcon } from "lucide-react";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
 import { resolvedTextDirection } from "../ChatMarkdown";
 import { cn } from "~/lib/utils";
+import { ComposerBanner } from "./ComposerBanner";
 
 interface PendingUserInputPanelProps {
   pendingUserInputs: PendingUserInput[];
@@ -168,64 +169,46 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
 
   return (
     <Collapsible
-      className="py-2"
       open={!isCollapsed}
       onOpenChange={(open) => {
         setCollapsedQuestionId(open ? null : activeQuestion.id);
       }}
     >
-      {/* The trigger's wrapper is inset less than the card's text column, and
-          the trigger pays the difference back as padding: the hover background
-          and focus ring bleed 10px past that column on both sides, while the
-          header label and the chevron still line up with the left and right
-          edges of the question text below. The negative block margin keeps the
-          taller hit area from pushing the panel down. */}
-      <div className="flex items-center gap-1 px-1 sm:px-2">
-        <CollapsibleTrigger
-          title={
-            isCollapsed ? "Show the question and its options" : "Hide the question and its options"
-          }
-          data-pending-user-input-toggle={isCollapsed ? "collapsed" : "expanded"}
-          className="group -my-1 flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-start outline-none transition-colors duration-150 hover:bg-muted/35 focus-visible:ring-1 focus-visible:ring-primary/25"
-        >
+      <CollapsibleTrigger
+        render={<ComposerBanner.Row render={<button type="button" />} />}
+        title={
+          isCollapsed ? "Show the question and its options" : "Hide the question and its options"
+        }
+        data-pending-user-input-toggle={isCollapsed ? "collapsed" : "expanded"}
+      >
+        <ComposerBanner.Icon />
+        <ComposerBanner.Content>
           <span
             dir={resolvedTextDirection(activeQuestion.header)}
-            className="text-xs font-medium text-muted-foreground group-hover:text-foreground/85"
+            className="shrink-0 font-medium text-muted-foreground"
           >
             {activeQuestion.header}
           </span>
+          {isCollapsed ? (
+            <span
+              dir={resolvedTextDirection(activeQuestion.question)}
+              className="min-w-0 flex-1 truncate text-secondary-label"
+            >
+              {activeQuestion.question}
+            </span>
+          ) : null}
+        </ComposerBanner.Content>
+        <ComposerBanner.Actions>
           {prompt.questions.length > 1 ? (
             <span className="text-[10px] font-medium text-muted-foreground tabular-nums">
               {questionIndex + 1}/{prompt.questions.length}
             </span>
           ) : null}
-          {/* Collapsed, the header is otherwise just a section label and a
-              counter, so the question itself is echoed here as a one-line
-              reminder of what is being asked. */}
-          {isCollapsed ? (
-            <span
-              dir={resolvedTextDirection(activeQuestion.question)}
-              className="min-w-0 flex-1 truncate text-secondary-label text-xs"
-            >
-              {activeQuestion.question}
-            </span>
-          ) : null}
-          {/* The chevron points at the body: down while it is open below the
-              header, up while it is collapsed into it. */}
-          <ChevronDownIcon
-            aria-hidden="true"
-            className={cn(
-              "ml-auto size-3.5 shrink-0 text-secondary-label transition-transform duration-150 group-hover:text-foreground",
-              isCollapsed && "rotate-180",
-            )}
-          />
-        </CollapsibleTrigger>
-      </div>
-      {/* The panel carries the horizontal padding itself: it clips its content
-          while the height animates, so the option buttons have to sit inside
-          that padding or their focus rings get shaved off at the edges. */}
-      <CollapsiblePanel className="px-3 sm:px-4">
-        <div className="pt-2 pb-0.5">
+          <ComposerBanner.ToggleIcon expanded={!isCollapsed} />
+        </ComposerBanner.Actions>
+      </CollapsibleTrigger>
+      <CollapsiblePanel>
+        <ComposerBanner.Body className="pe-1 pb-1">
           {/* The question and its options are agent-authored prose, so each
               string resolves its own direction — a Hebrew question reads and
               aligns right-to-left while the panel chrome stays put. */}
@@ -298,7 +281,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
               );
             })}
           </div>
-        </div>
+        </ComposerBanner.Body>
       </CollapsiblePanel>
     </Collapsible>
   );

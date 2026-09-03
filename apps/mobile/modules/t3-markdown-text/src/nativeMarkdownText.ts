@@ -1,7 +1,11 @@
 import type { MarkdownNode } from "react-native-nitro-markdown/headless";
 
 import type { SelectableMarkdownSkill } from "./SelectableMarkdownText.types";
-import { resolveMarkdownLinkPresentation, type MarkdownFileIcon } from "./markdownLinks";
+import {
+  resolveMarkdownInlineCodePresentation,
+  resolveMarkdownLinkPresentation,
+  type MarkdownFileIcon,
+} from "./markdownLinks";
 
 export type MarkdownWritingDirection = "ltr" | "rtl";
 
@@ -405,11 +409,16 @@ function appendNode(
       // (the web pins `code` to LTR with CSS). Attributed strings have no
       // per-span direction, so wrap the span in an LTR isolate (LRI … PDI).
       const content = nodeTextContent(node);
-      return appendRun(
-        runs,
-        context.writingDirection === "rtl" ? `\u2066${content}\u2069` : content,
-        { ...context, code: true },
-      );
+      const isolate = (value: string) =>
+        context.writingDirection === "rtl" ? `\u2066${value}\u2069` : value;
+      const presentation = context.href ? null : resolveMarkdownInlineCodePresentation(content);
+      return presentation
+        ? appendRun(runs, isolate(presentation.label), {
+            ...context,
+            href: presentation.href,
+            fileIcon: presentation.icon,
+          })
+        : appendRun(runs, isolate(content), { ...context, code: true });
     }
     case "soft_break":
       return appendRun(runs, " ", context);
