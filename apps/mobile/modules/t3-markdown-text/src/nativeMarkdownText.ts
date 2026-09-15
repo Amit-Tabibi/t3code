@@ -220,11 +220,16 @@ function textNodeContent(value: string): string {
   return decodeHtmlEntities(value).replace(INLINE_HTML_TAG_PATTERN, "");
 }
 
+// Tag-stripping regex that doesn't stop at a `>` inside a quoted attribute
+// value (e.g. `<span title="English > Hebrew">`), which would otherwise leak
+// attribute text into the direction-detection scan.
+const HTML_TAG = /<(?:[^>"']|"[^"]*"|'[^']*')*>/g;
+
 function inlineHtmlText(value: string): string {
   if (/^<br\s*\/?>$/i.test(value.trim())) {
     return "\n";
   }
-  return decodeHtmlEntities(value.replace(/<[^>]+>/g, ""));
+  return decodeHtmlEntities(value.replace(HTML_TAG, ""));
 }
 
 function sameRunStyle(left: NativeMarkdownTextRun, right: NativeMarkdownTextRun): boolean {
@@ -381,7 +386,8 @@ function nodeTextContent(node: MarkdownNode): string {
 // thin neutrals ("speed-to-lead", "U1+U2+U3+U5", "OpenAI export"); a connector
 // is only swallowed when another Latin word follows it, so sentence-final
 // punctuation stays outside the isolate. Mirrors the web app's <bdi> pass.
-const LATIN_RUN = /\p{Script=Latin}[\p{Script=Latin}\d]*(?:[ +&/.:'@_-]+[\p{Script=Latin}\d]+)*/gu;
+const LATIN_RUN =
+  /(?<!\$)\p{Script=Latin}[\p{Script=Latin}\d]*(?:[ +&/.:'@_-]+[\p{Script=Latin}\d]+)*/gu;
 
 function isolateLatinRuns(text: string): string {
   return text.replace(LATIN_RUN, (run) => `\u2066${run}\u2069`);
@@ -403,8 +409,14 @@ function appendNode(
     }
     case "math_inline":
       return appendRun(runs, textNodeContent(nodeTextContent(node)), context);
-    case "html_inline":
-      return appendRun(runs, inlineHtmlText(nodeTextContent(node)), context);
+    case "html_inline": {
+      const content = inlineHtmlText(nodeTextContent(node));
+      return appendRun(
+        runs,
+        context.writingDirection === "rtl" ? isolateLatinRuns(content) : content,
+        context,
+      );
+    }
     case "code_inline": {
       // Inline code keeps its left-to-right shape even inside an RTL paragraph
       // (the web pins `code` to LTR with CSS). Attributed strings have no

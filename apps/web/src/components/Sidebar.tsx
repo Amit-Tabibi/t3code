@@ -2072,7 +2072,7 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
           {props.project ? (
             <ProjectFavicon project={props.project} className="size-4 shrink-0" />
           ) : null}
-          <span dir="auto" className="min-w-0 flex-1 truncate">
+          <span dir="auto" className="min-w-0 flex-1 truncate text-start">
             {thread.title}
           </span>
           <span className="shrink-0 text-xs text-muted-foreground/55 tabular-nums">

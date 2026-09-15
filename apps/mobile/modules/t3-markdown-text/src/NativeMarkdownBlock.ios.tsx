@@ -526,11 +526,6 @@ function NativeList(props: {
   const ordered = props.node.ordered ?? false;
   const start = props.node.start ?? 1;
   const nested = props.depth > 0;
-  // The list takes one direction as a whole — inherited from the enclosing block,
-  // or resolved from the list's own first strong letter — so an RTL list paints
-  // every marker on the right of the text it labels.
-  const direction = props.direction ?? markdownBlockDirection(props.node);
-  const rtl = direction === "rtl";
   return (
     <View
       style={{
@@ -538,6 +533,11 @@ function NativeList(props: {
       }}
     >
       {(props.node.children ?? []).map((item, index) => {
+        // Each item resolves its own direction — inherited from the enclosing
+        // block, or from the item's own first strong letter — so a Hebrew item
+        // in an English list still gets its marker on the right, and vice versa.
+        const itemDirection = props.direction ?? markdownBlockDirection(item);
+        const rtl = itemDirection === "rtl";
         const taskMarker = item.type === "task_list_item";
         const marker = taskMarker
           ? item.checked
@@ -590,7 +590,7 @@ function NativeList(props: {
                   highlightCode={props.highlightCode}
                   onLinkPress={props.onLinkPress}
                   depth={props.depth + 1}
-                  direction={direction}
+                  direction={itemDirection}
                   compact
                 />
               ))}

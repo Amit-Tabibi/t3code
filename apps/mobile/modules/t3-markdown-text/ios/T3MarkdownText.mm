@@ -197,6 +197,38 @@ T3MarkdownOutsideTapCoordinatorForWindow(UIWindow *window)
   return coordinator;
 }
 
+// The markdown renderer wraps inline code in an RTL paragraph with an LTR bidi
+// isolate (LRI/PDI) and file/skill placeholders with the object-replacement
+// character — both invisible in the UI, neither meant to leak into a paste.
+@interface T3MarkdownSelectableTextView : UITextView
+@end
+
+@implementation T3MarkdownSelectableTextView
+
+- (void)copy:(id)sender
+{
+  NSRange range = self.selectedRange;
+  if (range.length == 0) {
+    [super copy:sender];
+    return;
+  }
+
+  NSString *selectedText = [self.attributedText attributedSubstringFromRange:range].string;
+  NSMutableString *sanitized = [selectedText mutableCopy];
+  [sanitized replaceOccurrencesOfString:@"\uFFFC" withString:@"" options:0 range:NSMakeRange(0, sanitized.length)];
+  [sanitized replaceOccurrencesOfString:@"\u2066" withString:@"" options:0 range:NSMakeRange(0, sanitized.length)];
+  [sanitized replaceOccurrencesOfString:@"\u2069" withString:@"" options:0 range:NSMakeRange(0, sanitized.length)];
+
+  if ([sanitized isEqualToString:selectedText]) {
+    [super copy:sender];
+    return;
+  }
+
+  UIPasteboard.generalPasteboard.string = sanitized;
+}
+
+@end
+
 @interface T3MarkdownText () <RCTT3MarkdownTextViewProtocol, UIGestureRecognizerDelegate, UITextViewDelegate>
 
 @end
@@ -231,7 +263,7 @@ T3MarkdownOutsideTapCoordinatorForWindow(UIWindow *window)
     self.contentView = _view;
     self.clipsToBounds = true;
 
-    _textView = [[UITextView alloc] init];
+    _textView = [[T3MarkdownSelectableTextView alloc] init];
     _attachmentImages = [[NSMutableDictionary alloc] init];
     _pendingAttachmentUris = [[NSMutableSet alloc] init];
     _textView.scrollEnabled = false;

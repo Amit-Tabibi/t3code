@@ -440,7 +440,11 @@ const CHAT_MARKDOWN_SANITIZE_SCHEMA = {
     ...defaultSchema.attributes,
     "*": (defaultSchema.attributes?.["*"] ?? []).filter((attribute) => attribute !== "title"),
     code: [...(defaultSchema.attributes?.code ?? []), "dataCodeMeta", "dataInlineCode"],
-    blockquote: [...(defaultSchema.attributes?.blockquote ?? []), "dataAlert"],
+    blockquote: [
+      ...(defaultSchema.attributes?.blockquote ?? []),
+      "dataAlert",
+      "dataAlertDirection",
+    ],
     div: [...(defaultSchema.attributes?.div ?? []), ...CODEX_ARTIFACT_TEMPLATE_HAST_PROPERTIES],
     a: [...(defaultSchema.attributes?.a ?? []), "dataPullRequestAutolink"],
     img: [
@@ -793,10 +797,23 @@ function remarkTextDirection() {
       }
 
       // A GitHub alert is rendered as a titled callout rather than a quote, and
-      // its own renderer builds that chrome from scratch. Claiming the block
-      // here would strand its body: the `dir` never reaches the callout, and the
-      // paragraphs inside it would have been skipped as already-covered.
+      // its own renderer builds that chrome from scratch. Its outer container
+      // hardcodes `dir="auto"`, but the browser's native scan for that skips
+      // any descendant that itself carries an explicit `dir` — and the alert's
+      // own paragraphs need one (below) so their own text aligns correctly.
+      // That leaves the container's native scan nothing to resolve from, so
+      // its direction is computed here instead and threaded through as data
+      // for the renderer to apply directly.
       const isAlertBlockquote = type === "blockquote" && node.data?.hProperties?.dataAlert != null;
+      if (isAlertBlockquote) {
+        node.data = {
+          ...node.data,
+          hProperties: {
+            ...node.data?.hProperties,
+            dataAlertDirection: resolvedTextDirection(directionDetectionText(node)),
+          },
+        };
+      }
       const isDirectionBlock = !isAlertBlockquote && AUTO_DIRECTION_NODE_TYPES.has(type);
       if (isDirectionBlock && !insideAutoBlock) {
         // `dir="auto"` (and the `plaintext` CSS) is the browser's own first-strong
@@ -887,11 +904,14 @@ function readInitialWordWrapSetting(): boolean {
 }
 
 // Strong-RTL code points: Hebrew, Arabic, Syriac, Thaana, NKo, Samaritan, Mandaic and
-// their extensions/presentation forms, plus the astral RTL blocks (Phoenician … Adlam).
+// their extensions/presentation forms, the RTL formatting mark (RLM), plus the astral
+// RTL blocks (Phoenician … Adlam).
 const STRONG_RTL_CHAR =
-  /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF\u{10800}-\u{10FFF}\u{1E800}-\u{1EFFF}]/u;
+  /[\u0590-\u08FF\u200F\uFB1D-\uFDFF\uFE70-\uFEFF\u{10800}-\u{10FFF}\u{1E800}-\u{1EFFF}]/u;
 // First letter decides (UBA P2/P3): digits, punctuation and symbols are neutral.
-const FIRST_LETTER = /\p{L}/u;
+// RLM/ALM (the strong-direction formatting marks) count too — a block that opens
+// with one is asserting its direction explicitly.
+const FIRST_LETTER = /[\p{L}\u061C\u200F]/u;
 
 // The direction a block of text renders in — what `dir="auto"` would resolve.
 export function firstStrongDirection(text: string): TextDirection {
@@ -907,7 +927,7 @@ export function firstStrongDirection(text: string): TextDirection {
 // mobile app's pattern (each app keeps its own copy — no cross-app imports)
 // and stripLeadingLTR from the claude-desktop-rtl-patch.
 const LTR_TECH_TOKEN =
-  /https?:\/\/\S+|`[^`\n]+`|\S*[/\\]\S+|\b\w+\.\w{1,5}\b|"[^"\n]+"|[“«][^”»\n]+[”»]|\([^()\n]+\)/gu;
+  /https?:\/\/\S+|`[^`\n]+`|(?:^|(?<=\s))\S*[/\\]\S+|\b\w+\.\w{1,5}\b|"[^"\n]+"|[“«][^”»\n]+[”»]|\([^()\n]+\)/gu;
 
 function stripLtrTechTokens(text: string): string {
   // A span carrying its own strong-RTL letters (an RTL slash pair like כן/לא,
@@ -2975,12 +2995,26 @@ const CHAT_MARKDOWN_COMPONENTS = {
     }
     // Not a <blockquote>: the stylesheet mutes those, and an alert's body is ordinary
     // text under a colored title — which is how the host renders it.
+    //
+    // The container's direction is computed by remarkTextDirection rather than
+    // left to a native `dir="auto"` scan: the body paragraphs below carry their
+    // own explicit `dir` (for their own alignment), and the browser's `auto`
+    // resolution skips descendants that already have one — leaving nothing for
+    // a native scan on this container to resolve from.
+    const alertDirection =
+      String((props as Record<string, unknown>)["data-alert-direction"] ?? "") === "rtl"
+        ? "rtl"
+        : "ltr";
     return (
-      <div role="note" dir="auto" className={cn("my-1 border-s-2 ps-3", alert.borderClassName)}>
+      <div
+        role="note"
+        dir={alertDirection}
+        className={cn("my-1 border-s-2 ps-3", alert.borderClassName)}
+      >
         <p className={cn("flex items-center gap-1.5 font-medium", alert.titleClassName)}>
           <alert.Icon aria-hidden className="size-3.5 shrink-0" />
           {/* dir="ltr" on the label text only (not the row) keeps it out of the container's
-              dir="auto" resolution, so the body decides the side and the row follows it. */}
+              direction — the body decides the side and the row follows it. */}
           <span dir="ltr">{alert.label}</span>
         </p>
         {children}

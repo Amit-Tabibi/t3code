@@ -17,20 +17,30 @@ import kotlin.math.max
 import kotlin.math.min
 
 private const val OBJECT_REPLACEMENT_CHARACTER = "\uFFFC"
+// The markdown renderer wraps inline code in an RTL paragraph with an LTR bidi
+// isolate (LRI \u2066 \u2026 PDI \u2069) so it renders left-to-right without a Text
+// ref call per span. Invisible in the UI, but must not leak into a paste.
+private val BIDI_ISOLATE_CHARACTERS = setOf('\u2066', '\u2069')
 
 private fun copyTextWithoutInlineImages(
   text: CharSequence,
   start: Int,
   end: Int
 ): String {
-  if (text !is Spanned) return text.subSequence(start, end).toString()
+  if (text !is Spanned) {
+    return buildString {
+      for (index in start until end) {
+        if (text[index] !in BIDI_ISOLATE_CHARACTERS) append(text[index])
+      }
+    }
+  }
 
   return buildString {
     for (index in start until end) {
       val isInlineImage =
         text[index].toString() == OBJECT_REPLACEMENT_CHARACTER &&
           text.getSpans(index, index + 1, ReplacementSpan::class.java).isNotEmpty()
-      if (!isInlineImage) append(text[index])
+      if (!isInlineImage && text[index] !in BIDI_ISOLATE_CHARACTERS) append(text[index])
     }
   }
 }
