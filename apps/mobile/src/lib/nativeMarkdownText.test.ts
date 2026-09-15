@@ -273,15 +273,16 @@ describe("nativeMarkdownDocumentRuns", () => {
       ],
     });
     expect(runs).toEqual([
-      { text: "Inspect ", role: "body" },
+      { text: "Inspect ", role: "body", writingDirection: "ltr" },
       {
         text: "Checkout.tsx",
         role: "body",
         href: "src/Checkout.tsx",
         fileIcon: "react",
         sourceText: "@src/Checkout.tsx",
+        writingDirection: "ltr",
       },
-      { text: ". Use @t3tools/contracts.", role: "body" },
+      { text: ". Use @t3tools/contracts.", role: "body", writingDirection: "ltr" },
     ]);
   });
 
@@ -599,8 +600,8 @@ describe("nativeMarkdownDocumentRuns", () => {
     // Merging these would render one chip and emit one copy range with a
     // combined label for two distinct references.
     expect(runs).toEqual([
-      { text: "First", role: "body", href, fileIcon: "bash" },
-      { text: "Second", role: "body", href, fileIcon: "bash" },
+      { text: "First", role: "body", href, fileIcon: "bash", writingDirection: "ltr" },
+      { text: "Second", role: "body", href, fileIcon: "bash", writingDirection: "ltr" },
     ]);
   });
 });
