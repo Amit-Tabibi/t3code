@@ -777,6 +777,13 @@ describe("chat markdown text direction", () => {
     expect(html).toContain('<li dir="auto">');
   });
 
+  it("gives a nested list's items their own direction too, not just the top level", () => {
+    // A Hebrew item nested under an English top-level item must still get its
+    // own `dir`, or its marker inherits the (wrong) English sub-list side.
+    const html = render("- English top\n  - English sub\n  - פריט בעברית");
+    expect(html).toContain('<li dir="auto">פריט בעברית</li>');
+  });
+
   it("does not re-mark the blocks inside a claimed quote", () => {
     const html = render("> اقتباس");
     expect(html).not.toContain('<blockquote dir="auto">\n<p dir="auto">');

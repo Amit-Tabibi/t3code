@@ -775,13 +775,19 @@ function remarkTextDirection() {
     // side follows the `direction` property, which only a `dir` attribute
     // flips), and a leaf whose heuristic disagrees with its own first-strong
     // scan is pinned, since `plaintext` cannot discount a leading Latin token.
-    const visit = (node: MarkdownAstNode, insideAutoBlock: boolean) => {
+    // `pinnedRtl` tracks whether the nearest claimed ancestor was forced to an
+    // explicit `dir="rtl"` (a heuristic override, not the default `"auto"`).
+    // That pin is deliberate — the `[dir="rtl"] … li` CSS rule means nested
+    // content should inherit it rather than recompute its own direction.
+    // Everywhere else — including under a plain `"auto"` ancestor — a nested
+    // list's own items still resolve independently, same as a top-level one.
+    const visit = (node: MarkdownAstNode, insideAutoBlock: boolean, pinnedRtl: boolean) => {
       const type = node.type ?? "";
       if (LTR_DIRECTION_NODE_TYPES.has(type)) {
         setDirection(node, "ltr");
         // A pinned table is not an `auto` ancestor, so its cells are free to
         // pick their own direction while the column order stays put.
-        node.children?.forEach((child) => visit(child, false));
+        node.children?.forEach((child) => visit(child, false, false));
         return;
       }
 
@@ -792,7 +798,10 @@ function remarkTextDirection() {
         if (!insideAutoBlock) {
           setDirection(node, resolvedTextDirection(directionDetectionText(node)));
         }
-        node.children?.forEach((child) => visit(child, insideAutoBlock));
+        // A nested list's items resolve from their own text just like a
+        // top-level list's, unless they sit under a pinned `dir="rtl"`
+        // ancestor — there, inheritance is the point, so leave them be.
+        node.children?.forEach((child) => visit(child, pinnedRtl && insideAutoBlock, pinnedRtl));
         return;
       }
 
@@ -815,6 +824,7 @@ function remarkTextDirection() {
         };
       }
       const isDirectionBlock = !isAlertBlockquote && AUTO_DIRECTION_NODE_TYPES.has(type);
+      let pinnedRtlHere = false;
       if (isDirectionBlock && !insideAutoBlock) {
         // `dir="auto"` (and the `plaintext` CSS) is the browser's own first-strong
         // scan, which cannot discount a leading Latin tech token — "server.py זה
@@ -822,13 +832,13 @@ function remarkTextDirection() {
         // pin the block with an explicit `dir="rtl"` (index.css lifts `plaintext`
         // for it); everywhere else the browser keeps resolving the block itself.
         const detectionText = directionDetectionText(node);
-        setDirection(
-          node,
+        const dir =
           firstStrongDirection(detectionText) === "ltr" &&
-            resolvedTextDirection(detectionText) === "rtl"
+          resolvedTextDirection(detectionText) === "rtl"
             ? "rtl"
-            : "auto",
-        );
+            : "auto";
+        setDirection(node, dir);
+        pinnedRtlHere = dir === "rtl";
       } else if (isDirectionBlock && insideAutoBlock) {
         // Inside a claimed block the `plaintext` CSS still re-resolves each
         // leaf from its own text — pin just the leaves whose leading Latin
@@ -839,14 +849,19 @@ function remarkTextDirection() {
           resolvedTextDirection(detectionText) === "rtl"
         ) {
           setDirection(node, "rtl");
+          pinnedRtlHere = true;
         }
       }
       node.children?.forEach((child) =>
-        visit(child, insideAutoBlock || (isDirectionBlock && !insideAutoBlock)),
+        visit(
+          child,
+          insideAutoBlock || (isDirectionBlock && !insideAutoBlock),
+          pinnedRtl || pinnedRtlHere,
+        ),
       );
     };
 
-    visit(tree, false);
+    visit(tree, false, false);
   };
 }
 
