@@ -356,6 +356,40 @@ describe("nativeMarkdownDocumentRuns", () => {
     ]);
   });
 
+  it("keeps a skill reference intact when Latin runs are isolated for RTL text", () => {
+    const node: MarkdownNode = {
+      type: "document",
+      children: [
+        {
+          type: "paragraph",
+          children: [{ type: "text", content: "Use $ui for this." }],
+        },
+      ],
+    };
+
+    const runs = nativeMarkdownDocumentRuns(node, [{ name: "ui", displayName: "UI" }], "rtl");
+    const skillRun = runs.find((run) => run.skillName === "ui");
+    expect(skillRun?.text).toBe("$ui");
+    expect(skillRun?.skillLabel).toBe("UI");
+  });
+
+  it("keeps a digit-led skill reference intact when Latin runs are isolated for RTL text", () => {
+    const node: MarkdownNode = {
+      type: "document",
+      children: [
+        {
+          type: "paragraph",
+          children: [{ type: "text", content: "Use $2spec for this." }],
+        },
+      ],
+    };
+
+    const runs = nativeMarkdownDocumentRuns(node, [{ name: "2spec", displayName: "2Spec" }], "rtl");
+    const skillRun = runs.find((run) => run.skillName === "2spec");
+    expect(skillRun?.text).toBe("$2spec");
+    expect(skillRun?.skillLabel).toBe("2Spec");
+  });
+
   it("decorates known skill references inside blockquotes", () => {
     const node: MarkdownNode = {
       type: "blockquote",

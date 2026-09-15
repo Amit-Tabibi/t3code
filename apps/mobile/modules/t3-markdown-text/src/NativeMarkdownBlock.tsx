@@ -623,6 +623,7 @@ export function NativeMarkdownBlock(props: {
           skills={props.skills}
           textStyle={props.textStyle}
           onLinkPress={props.onLinkPress}
+          direction={props.direction}
         />
       );
     case "html_block":

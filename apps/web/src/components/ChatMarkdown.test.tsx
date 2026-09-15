@@ -899,7 +899,11 @@ describe("chat markdown text direction", () => {
 
   it("does not re-mark the blocks inside a claimed quote", () => {
     const html = render("> اقتباس");
-    expect(html).not.toContain('<blockquote dir="auto">\n<p dir="auto">');
+    // `renderToStaticMarkup` serializes adjacent tags with no separator, so
+    // this is the actual boundary a nested, wrongly re-marked paragraph
+    // would produce — the newline-separated form the assertion used to check
+    // for can never appear in real output.
+    expect(html).not.toContain('<blockquote dir="auto"><p dir="auto">');
   });
 
   it("pins code left-to-right so an Arabic comment cannot reorder a snippet", () => {

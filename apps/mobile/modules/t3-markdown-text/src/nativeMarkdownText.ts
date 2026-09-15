@@ -539,11 +539,30 @@ function nodeTextContent(node: MarkdownNode): string {
 // thin neutrals ("speed-to-lead", "U1+U2+U3+U5", "OpenAI export"); a connector
 // is only swallowed when another Latin word follows it, so sentence-final
 // punctuation stays outside the isolate. Mirrors the web app's <bdi> pass.
-const LATIN_RUN =
-  /(?<!\$)\p{Script=Latin}[\p{Script=Latin}\d]*(?:[ +&/.:'@_-]+[\p{Script=Latin}\d]+)*/gu;
+const LATIN_RUN = /\p{Script=Latin}[\p{Script=Latin}\d]*(?:[ +&/.:'@_-]+[\p{Script=Latin}\d]+)*/gu;
+
+// A `$`-prefixed span shaped like a skill token ($ui, $2spec \u2014 mirrors
+// SKILL_TOKEN_REGEX's own token grammar) must reach decorateSkillRuns intact:
+// isolating even one of its interior characters breaks that later regex
+// match, silently turning a real skill chip back into plain text. A
+// lookbehind keyed off a fixed offset from `$` isn't enough \u2014 the token can
+// be longer than one character \u2014 so the whole candidate span is carved out
+// before Latin runs elsewhere in the text are isolated.
+const SKILL_TOKEN_SPAN =
+  /\$(?![0-9][0-9_]*(?:[kKmMbBtT]|[eE][0-9]+)?(?:\s|$))[a-zA-Z0-9][a-zA-Z0-9:_-]*/g;
 
 function isolateLatinRuns(text: string): string {
-  return text.replace(LATIN_RUN, (run) => `\u2066${run}\u2069`);
+  let result = "";
+  let cursor = 0;
+  for (const match of text.matchAll(SKILL_TOKEN_SPAN)) {
+    const start = match.index ?? 0;
+    const end = start + match[0].length;
+    result += text.slice(cursor, start).replace(LATIN_RUN, (run) => `\u2066${run}\u2069`);
+    result += match[0];
+    cursor = end;
+  }
+  result += text.slice(cursor).replace(LATIN_RUN, (run) => `\u2066${run}\u2069`);
+  return result;
 }
 
 function appendNode(

@@ -60,10 +60,14 @@ export function ComposerEditor({
             fontFamily,
             ...bodyText,
             paddingVertical: contentInsetVertical,
+          },
+          textStyle,
+          // Direction is the draft's, not the caller's — kept last so it can't
+          // be overridden by a `textAlign`/`writingDirection` in `textStyle`.
+          {
             textAlign: writingDirection === "rtl" ? "right" : "left",
             writingDirection,
           },
-          textStyle,
         ]}
       />
     </TextInputWrapper>

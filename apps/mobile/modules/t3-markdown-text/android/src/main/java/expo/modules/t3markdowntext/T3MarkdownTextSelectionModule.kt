@@ -93,7 +93,12 @@ private fun canonicalSelection(
       hasContext = true
     }
   }
-  return if (hasContext) canonical.toString().replace(OBJECT_REPLACEMENT_CHARACTER, "") else null
+  if (!hasContext) return null
+  var sanitized = canonical.toString().replace(OBJECT_REPLACEMENT_CHARACTER, "")
+  for (isolate in BIDI_ISOLATE_CHARACTERS) {
+    sanitized = sanitized.replace(isolate.toString(), "")
+  }
+  return sanitized
 }
 
 private fun selectedContextRecords(records: JSONArray, selectedText: String): JSONArray {
