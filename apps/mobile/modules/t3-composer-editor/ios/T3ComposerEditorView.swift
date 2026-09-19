@@ -500,6 +500,12 @@ public final class T3ComposerEditorView: ExpoView, UITextViewDelegate, UITextDro
 
     placeholderLabel.numberOfLines = 0
     placeholderLabel.adjustsFontForContentSizeCategory = true
+    // Seed the alignment to match `isRightToLeft`'s initial `false`.
+    // `UILabel` defaults to `.natural`, which resolves to the right under an
+    // RTL system locale, and `setWritingDirection("ltr")` — the first call for
+    // an empty or Latin draft — returns early because the direction has not
+    // changed, so it would never correct it.
+    placeholderLabel.textAlignment = .left
     addSubview(placeholderLabel)
     applyTypography()
     applyTheme()

@@ -897,6 +897,42 @@ describe("chat markdown text direction", () => {
     expect(html).toContain('<li dir="auto">פריט בעברית</li>');
   });
 
+  it("gives raw HTML blocks their own direction too", () => {
+    // Raw HTML arrives via `rehypeRaw`, after the mdast direction pass has
+    // already run, so without the rehype pass these keep the inherited LTR
+    // alignment however `unicode-bidi: plaintext` reorders the glyphs.
+    const html = render("<p>שלום עולם</p>");
+    expect(html).toContain('<p dir="auto">שלום עולם</p>');
+  });
+
+  it("gives each raw table cell its own direction, not the table's", () => {
+    const html = render(
+      "<table><tbody><tr><td>English cell</td><td>خلية عربية</td></tr></tbody></table>",
+    );
+    expect(html).toContain('<td dir="auto">English cell</td>');
+    expect(html).toContain('<td dir="auto">خلية عربية</td>');
+  });
+
+  it("keeps a direction the raw HTML author wrote", () => {
+    const html = render('<p dir="ltr">שלום</p>');
+    expect(html).toContain('<p dir="ltr">שלום</p>');
+    expect(html).not.toContain('<p dir="auto">שלום</p>');
+  });
+
+  it("does not re-mark the blocks inside a claimed raw container", () => {
+    const html = render('<blockquote dir="rtl"><p>שלום</p></blockquote>');
+    expect(html).not.toContain('<p dir="auto">');
+  });
+
+  it("isolates Latin runs in RTL prose even when raw HTML is not parsed", () => {
+    // `rehypeIsolateLatinRuns` is not tied to raw HTML; it must still run when
+    // a caller opts out of `rehypeRaw`.
+    const html = renderToStaticMarkup(
+      <ChatMarkdown text={'הפקודה "git status" עובדת.'} cwd="/repo" parseRawHtml={false} />,
+    );
+    expect(html).toContain("<bdi>git status</bdi>");
+  });
+
   it("does not re-mark the blocks inside a claimed quote", () => {
     const html = render("> اقتباس");
     // `renderToStaticMarkup` serializes adjacent tags with no separator, so

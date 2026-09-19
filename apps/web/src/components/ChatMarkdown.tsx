@@ -606,12 +606,74 @@ function rehypeIsolateLatinRuns() {
   };
 }
 
+/**
+ * Block-level direction for elements `remarkTextDirection` never saw: raw HTML
+ * reaches the tree through `rehypeRaw`, after the mdast pass has already run,
+ * so a literal `<p>שלום</p>` in chat prose would otherwise keep the
+ * inherited LTR alignment (`unicode-bidi: plaintext` fixes the *ordering*
+ * inside the line, but never sets `direction`, which is what `text-align:
+ * start` follows).
+ *
+ * An element that already carries `dir` — whether authored in the raw HTML or
+ * stamped on by the mdast pass — is left alone and claims its subtree, which
+ * is the same rule `remarkTextDirection` uses: the browser's own `dir="auto"`
+ * scan stops at a descendant with an explicit direction, so re-marking the
+ * blocks inside a claimed container would fight it.
+ */
+function rehypeRawTextDirection() {
+  return (tree: HastNode) => {
+    const visit = (node: HastNode, insideClaimed: boolean) => {
+      if (node.type !== "element") {
+        node.children?.forEach((child) => visit(child, insideClaimed));
+        return;
+      }
+
+      const properties = (node as { properties?: Record<string, unknown> }).properties;
+      if (properties?.dir != null) {
+        node.children?.forEach((child) => visit(child, true));
+        return;
+      }
+
+      if (!insideClaimed && BIDI_LEAF_TAG_NAMES.has(node.tagName ?? "")) {
+        const detectionText = hastTextContent(node);
+        // Same pin rule as the mdast pass: `dir="auto"` is a plain first-strong
+        // scan that cannot discount a leading Latin tech token, so pin the
+        // block only where the heuristic and first-strong disagree.
+        const dir =
+          firstStrongDirection(detectionText) === "ltr" &&
+          resolvedTextDirection(detectionText) === "rtl"
+            ? "rtl"
+            : "auto";
+        (node as { properties?: Record<string, unknown> }).properties = {
+          ...properties,
+          dir,
+        };
+        node.children?.forEach((child) => visit(child, true));
+        return;
+      }
+
+      node.children?.forEach((child) => visit(child, insideClaimed));
+    };
+    visit(tree, false);
+  };
+}
+
 const CHAT_MARKDOWN_REHYPE_PLUGINS = [
   rehypeRaw,
   rehypePreserveImageSourceMeta,
   [rehypeSanitize, CHAT_MARKDOWN_SANITIZE_SCHEMA],
+  // After sanitize, so the `dir` it assigns survives the schema.
+  rehypeRawTextDirection,
   rehypeIsolateLatinRuns,
 ] satisfies NonNullable<ReactMarkdownOptions["rehypePlugins"]>;
+
+/**
+ * Without `rehypeRaw` there is no raw HTML to direction-mark, but RTL prose
+ * still needs its Latin runs isolated — that pass is not tied to raw HTML.
+ */
+const CHAT_MARKDOWN_PLAIN_REHYPE_PLUGINS = [rehypeIsolateLatinRuns] satisfies NonNullable<
+  ReactMarkdownOptions["rehypePlugins"]
+>;
 
 /** GitHub's own five alert kinds, in its colors: the glyph names the urgency, the title says it. */
 const GITHUB_ALERT_PRESENTATIONS: Record<
@@ -3718,7 +3780,9 @@ function ChatMarkdown({
       <ChatMarkdownRendererContext value={componentState}>
         <ReactMarkdown
           remarkPlugins={remarkPlugins}
-          rehypePlugins={parseRawHtml ? CHAT_MARKDOWN_REHYPE_PLUGINS : undefined}
+          rehypePlugins={
+            parseRawHtml ? CHAT_MARKDOWN_REHYPE_PLUGINS : CHAT_MARKDOWN_PLAIN_REHYPE_PLUGINS
+          }
           skipHtml={false}
           components={CHAT_MARKDOWN_COMPONENTS}
           urlTransform={markdownUrlTransform}
