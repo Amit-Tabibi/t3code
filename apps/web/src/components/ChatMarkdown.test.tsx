@@ -958,6 +958,19 @@ describe("chat markdown text direction", () => {
     expect(html).not.toContain("<blockquote");
   });
 
+  it("flips the alert's own chrome for an RTL body, not just the body text", () => {
+    // The container hardcodes `dir="auto"`, whose native scan stops at the body
+    // paragraph's own `dir` — so the side its border and icon sit on comes from
+    // the direction computed in the mdast pass and threaded through as data.
+    const html = render("> [!NOTE]\n> مرحبا بالعالم.");
+    expect(html).toContain('role="note" dir="rtl"');
+  });
+
+  it("keeps an English alert's chrome on the left", () => {
+    const html = render("> [!WARNING]\n> Careful with this.");
+    expect(html).toContain('role="note" dir="ltr"');
+  });
+
   it("pins a file-link chip left-to-right even inside right-to-left prose", () => {
     // The `code` renderer swaps the chip in for the `<code dir="ltr">` it
     // replaces, so a path in an Arabic sentence keeps its own reading order.

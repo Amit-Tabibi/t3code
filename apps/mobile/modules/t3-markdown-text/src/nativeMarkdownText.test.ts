@@ -101,6 +101,25 @@ describe("resolvedTextDirection", () => {
   });
 });
 
+describe("mixed-direction lists", () => {
+  // Each item's marker side comes from `markdownBlockDirection(item)` when the
+  // enclosing list does not pin a direction, so an English item in an
+  // otherwise-Hebrew list keeps its bullet on its own side.
+  it("resolves each item from its own text, not the list's", () => {
+    const hebrewItem: MarkdownNode = {
+      type: "list_item",
+      children: [paragraph(text("\u05e4\u05e8\u05d9\u05d8 \u05d1\u05e2\u05d1\u05e8\u05d9\u05ea"))],
+    };
+    const englishItem: MarkdownNode = {
+      type: "list_item",
+      children: [paragraph(text("English item"))],
+    };
+
+    expect(markdownBlockDirection(hebrewItem)).toBe("rtl");
+    expect(markdownBlockDirection(englishItem)).toBe("ltr");
+  });
+});
+
 describe("markdownBlockDirection", () => {
   it("discounts a leading file name in plain paragraph text", () => {
     expect(markdownBlockDirection(paragraph(text("server.py זה הקובץ הראשי")))).toBe("rtl");
@@ -131,6 +150,25 @@ describe("markdownBlockDirection", () => {
     expect(markdownBlockDirection(paragraph({ type: "html_inline", content: "<u>שלום</u>" }))).toBe(
       "rtl",
     );
+  });
+});
+
+describe("html_inline in right-to-left prose", () => {
+  // Flattened inline markup is Latin text like any other, so it needs the same
+  // isolate treatment — otherwise the neutral quotes around `<kbd>AIOS</kbd>`
+  // reorder against the Hebrew that surrounds it.
+  it("isolates the Latin run inside flattened inline HTML", () => {
+    const node = document(
+      paragraph(
+        text('\u05d4\u05e7\u05e9 \u05e2\u05dc "'),
+        { type: "html_inline", content: "<kbd>AIOS</kbd>" },
+        text('" \u05e2\u05db\u05e9\u05d9\u05d5'),
+      ),
+    );
+    const joined = nativeMarkdownDocumentRuns(node, [], "rtl")
+      .map((run) => run.text)
+      .join("");
+    expect(joined).toContain("\u2066AIOS\u2069");
   });
 });
 
