@@ -419,7 +419,7 @@ function appendRun(
 }
 
 const SKILL_TOKEN_REGEX =
-  /(^|\s)\$(?![0-9][0-9_]*(?:[kKmMbBtT]|[eE][0-9]+)?(?:\s|$))(?=[a-zA-Z0-9:_-]*[a-zA-Z])([a-zA-Z0-9][a-zA-Z0-9:_-]*)(?=\s|$)/g;
+  /(^|\s)\p{Sc}(?![0-9][0-9_]*(?:[kKmMbBtT]|[eE][0-9]+)?(?:\s|$))(?=[a-zA-Z0-9:_-]*[a-zA-Z])([a-zA-Z0-9][a-zA-Z0-9:_-]*)(?=\s|$)/gu;
 
 function formatSkillLabel(skill: SelectableMarkdownSkill): string {
   const displayName = skill.displayName?.trim();
@@ -459,7 +459,7 @@ function decorateSkillRuns(
         continue;
       }
       const start = (match.index ?? 0) + prefix.length;
-      const end = start + name.length + 1;
+      const end = (match.index ?? 0) + match[0].length;
       if (start > cursor) {
         decorated.push({ ...run, text: run.text.slice(cursor, start) });
       }
@@ -541,15 +541,15 @@ function nodeTextContent(node: MarkdownNode): string {
 // punctuation stays outside the isolate. Mirrors the web app's <bdi> pass.
 const LATIN_RUN = /\p{Script=Latin}[\p{Script=Latin}\d]*(?:[ +&/.:'@_-]+[\p{Script=Latin}\d]+)*/gu;
 
-// A `$`-prefixed span shaped like a skill token ($ui, $2spec \u2014 mirrors
+// A currency-prefixed span shaped like a skill token ($ui, €ui, $2spec — mirrors
 // SKILL_TOKEN_REGEX's own token grammar) must reach decorateSkillRuns intact:
 // isolating even one of its interior characters breaks that later regex
 // match, silently turning a real skill chip back into plain text. A
-// lookbehind keyed off a fixed offset from `$` isn't enough \u2014 the token can
-// be longer than one character \u2014 so the whole candidate span is carved out
+// lookbehind keyed off a fixed offset from the prefix isn't enough — the token can
+// be longer than one character — so the whole candidate span is carved out
 // before Latin runs elsewhere in the text are isolated.
 const SKILL_TOKEN_SPAN =
-  /\$(?![0-9][0-9_]*(?:[kKmMbBtT]|[eE][0-9]+)?(?:\s|$))[a-zA-Z0-9][a-zA-Z0-9:_-]*/g;
+  /\p{Sc}(?![0-9][0-9_]*(?:[kKmMbBtT]|[eE][0-9]+)?(?:\s|$))[a-zA-Z0-9][a-zA-Z0-9:_-]*/gu;
 
 function isolateLatinRuns(text: string): string {
   let result = "";

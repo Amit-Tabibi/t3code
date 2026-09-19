@@ -138,7 +138,13 @@ function HighlightedCodeText(props: {
     }
   }
   return (
-    <MarkdownTextPrimitive uiTextView selectable style={style}>
+    <MarkdownTextPrimitive
+      uiTextView
+      selectable
+      selectionColor={props.textStyle.selectionColor}
+      selectionHandleColor={props.textStyle.selectionHandleColor}
+      style={style}
+    >
       {props.highlighted ? lines : props.content}
     </MarkdownTextPrimitive>
   );
@@ -179,8 +185,10 @@ function NativeCodeBlock(props: {
           justifyContent: "space-between",
         }}
       >
-        <Text
+        <MarkdownTextPrimitive
           selectable
+          selectionColor={props.textStyle.selectionColor}
+          selectionHandleColor={props.textStyle.selectionHandleColor}
           style={{
             flex: 1,
             color: props.textStyle.mutedColor,
@@ -189,7 +197,7 @@ function NativeCodeBlock(props: {
           }}
         >
           {languageLabel}
-        </Text>
+        </MarkdownTextPrimitive>
         <CopyTextButton
           accessibilityLabel={`Copy ${languageLabel.toLowerCase()} code`}
           text={content}
@@ -337,8 +345,10 @@ function NativeMarkdownImage(props: {
         }}
       />
       {props.node.alt ? (
-        <Text
+        <MarkdownTextPrimitive
           selectable
+          selectionColor={props.textStyle.selectionColor}
+          selectionHandleColor={props.textStyle.selectionHandleColor}
           style={{
             color: props.textStyle.mutedColor,
             fontFamily: props.textStyle.fontFamily,
@@ -347,7 +357,7 @@ function NativeMarkdownImage(props: {
           }}
         >
           {props.node.alt}
-        </Text>
+        </MarkdownTextPrimitive>
       ) : null}
     </View>
   );

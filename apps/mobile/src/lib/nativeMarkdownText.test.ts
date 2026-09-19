@@ -308,29 +308,32 @@ describe("nativeMarkdownDocumentRuns", () => {
     ]);
   });
 
-  it("decorates known skill references as selectable skill links", () => {
-    const node: MarkdownNode = {
-      type: "document",
-      children: [
-        {
-          type: "paragraph",
-          children: [{ type: "text", content: "Use $ui for this." }],
-        },
-      ],
-    };
+  it.each(["$", "€", "£", "¥", "₹", "₩", "₿", "𑿝"])(
+    "decorates %s skill references as selectable skill links",
+    (prefix) => {
+      const node: MarkdownNode = {
+        type: "document",
+        children: [
+          {
+            type: "paragraph",
+            children: [{ type: "text", content: `Use ${prefix}ui for this.` }],
+          },
+        ],
+      };
 
-    expect(nativeMarkdownDocumentRuns(node, [{ name: "ui", displayName: "UI" }])).toEqual([
-      { text: "Use ", role: "body", writingDirection: "ltr" },
-      {
-        text: "$ui",
-        role: "body",
-        skillName: "ui",
-        skillLabel: "UI",
-        writingDirection: "ltr",
-      },
-      { text: " for this.", role: "body", writingDirection: "ltr" },
-    ]);
-  });
+      expect(nativeMarkdownDocumentRuns(node, [{ name: "ui", displayName: "UI" }])).toEqual([
+        { text: "Use ", role: "body", writingDirection: "ltr" },
+        {
+          text: `${prefix}ui`,
+          role: "body",
+          skillName: "ui",
+          skillLabel: "UI",
+          writingDirection: "ltr",
+        },
+        { text: " for this.", role: "body", writingDirection: "ltr" },
+      ]);
+    },
+  );
 
   it("decorates known skill references that begin with a digit", () => {
     const node: MarkdownNode = {
@@ -356,22 +359,25 @@ describe("nativeMarkdownDocumentRuns", () => {
     ]);
   });
 
-  it("keeps a skill reference intact when Latin runs are isolated for RTL text", () => {
-    const node: MarkdownNode = {
-      type: "document",
-      children: [
-        {
-          type: "paragraph",
-          children: [{ type: "text", content: "Use $ui for this." }],
-        },
-      ],
-    };
+  it.each(["$", "\u20ac", "\u00a3", "\u00a5", "\u20b9", "\u20a9", "\u20bf"])(
+    "keeps a %s skill reference intact when Latin runs are isolated for RTL text",
+    (prefix) => {
+      const node: MarkdownNode = {
+        type: "document",
+        children: [
+          {
+            type: "paragraph",
+            children: [{ type: "text", content: `Use ${prefix}ui for this.` }],
+          },
+        ],
+      };
 
-    const runs = nativeMarkdownDocumentRuns(node, [{ name: "ui", displayName: "UI" }], "rtl");
-    const skillRun = runs.find((run) => run.skillName === "ui");
-    expect(skillRun?.text).toBe("$ui");
-    expect(skillRun?.skillLabel).toBe("UI");
-  });
+      const runs = nativeMarkdownDocumentRuns(node, [{ name: "ui", displayName: "UI" }], "rtl");
+      const skillRun = runs.find((run) => run.skillName === "ui");
+      expect(skillRun?.text).toBe(`${prefix}ui`);
+      expect(skillRun?.skillLabel).toBe("UI");
+    },
+  );
 
   it("keeps a digit-led skill reference intact when Latin runs are isolated for RTL text", () => {
     const node: MarkdownNode = {
