@@ -4708,7 +4708,7 @@ function UserMessageReviewCommentCard({ comment }: { comment: ReviewCommentConte
         </div>
       </div>
       {comment.text.length > 0 && (
-        <div className="wrap-break-word text-sm">
+        <div dir="auto" className="wrap-break-word text-sm">
           <ChatMarkdown
             text={comment.text}
             cwd={ctx.markdownCwd}

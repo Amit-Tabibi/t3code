@@ -1389,7 +1389,10 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
             {props.project ? (
               <ProjectFavicon project={props.project} className="size-4 shrink-0" />
             ) : null}
-            <span className="min-w-0 flex-1 truncate text-xs font-medium text-secondary-label">
+            <span
+              dir="auto"
+              className="min-w-0 flex-1 truncate text-xs font-medium text-secondary-label"
+            >
               {props.projectDisplayName}
             </span>
             <span className="ml-auto flex h-5 min-w-5 shrink-0 items-center justify-end">
@@ -1410,7 +1413,11 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
               </Tooltip>
             </span>
           </div>
-          <div aria-hidden className="mt-0.5 truncate text-sm font-medium text-foreground/90">
+          <div
+            aria-hidden
+            dir="auto"
+            className="mt-0.5 truncate text-sm font-medium text-foreground/90"
+          >
             {preview}
           </div>
         </div>
@@ -1981,6 +1988,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     isRenaming && canOperateThread ? (
       <input
         autoFocus
+        dir="auto"
         value={renamingTitle}
         aria-label="Thread title"
         onChange={(event) => onRenameTitleChange(event.target.value)}
@@ -1993,6 +2001,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       />
     ) : (
       <span
+        // Titles are generated from the thread's own prompt, so an Arabic thread
+        // gets an Arabic title — and its truncation ellipsis belongs on the left.
+        dir="auto"
         aria-hidden
         className={cn(
           "min-w-0 flex-1 text-sm transition-opacity motion-reduce:transition-none",
@@ -2306,6 +2317,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               {pinIndicator}
               {props.projectDisplayName ? (
                 <span
+                  dir="auto"
                   className={cn(
                     "min-w-0 flex-1 truncate text-secondary-label text-xs",
                     shouldRecede ? "font-normal" : "font-medium",
@@ -2655,8 +2667,9 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
           <span className="flex min-w-0 flex-1 flex-col">
             <span className="flex min-w-0 items-center gap-2.5">
               <span
+                dir="auto"
                 className={cn(
-                  "min-w-0 flex-1 truncate",
+                  "min-w-0 flex-1 truncate text-start",
                   props.isSettled
                     ? "font-normal text-secondary-label/70 group-hover/sidebar-row:text-foreground"
                     : "font-medium text-foreground",
